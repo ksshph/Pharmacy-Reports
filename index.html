@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pharmacy Shift Report - NGHA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header class="header-card">
+      <h1>Pharmacy Shift Report</h1>
+      <p>National Guard Health Affairs - Pharmaceutical Care Services</p>
+    </header>
+
+    <main>
+      <div id="homePage" class="page active">
+        <div class="buttons-card">
+          <button class="nav-btn add" onclick="showPage('addReport')">Add Report</button>
+          <button class="nav-btn latest" onclick="showPage('latestReports')">Latest Reports</button>
+          <button class="nav-btn view" onclick="showPage('viewReports')">View All Reports</button>
+        </div>
+      </div>
+
+      <div id="addReportPage" class="page">
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <div class="card">
+          <h2 class="card-title">Add New Shift Report</h2>
+          <form id="reportForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Employee Name *</label>
+                <input type="text" id="employeeName" required />
+              </div>
+              <div class="form-group">
+                <label>Badge Number *</label>
+                <input type="text" id="badgeNumber" required />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Section *</label>
+                <select id="section" required>
+                  <option value="">Select Section</option>
+                  <option>Inpatient Pharmacy</option>
+                  <option>Outpatient Pharmacy</option>
+                  <option>Clinical Services</option>
+                  <option>Material Management</option>
+                  <option>OR Pharmacy</option>
+                  <option>ER Pharmacy</option>
+                  <option>IV</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Shift</label>
+                <select id="shift">
+                  <option value="">Select Shift</option>
+                  <option>Morning</option>
+                  <option>Evening</option>
+                  <option>Night</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Send to Section (Optional)</label>
+              <select id="sendToSection">
+                <option value="">Select Section</option>
+                <option>Inpatient Pharmacy</option>
+                <option>Outpatient Pharmacy</option>
+                <option>Clinical Services</option>
+                <option>Material Management</option>
+                <option>OR Pharmacy</option>
+                <option>ER Pharmacy</option>
+                <option>IV</option>
+                <option>Other</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Shift Report *</label>
+              <textarea id="reportContent" required></textarea>
+            </div>
+
+            <button type="submit" class="btn-submit">Save Report</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="latestReportsPage" class="page">
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <div class="card">
+          <h2 class="card-title">Latest Reports by Section</h2>
+          <div id="latestReportsList"></div>
+        </div>
+      </div>
+
+      <div id="viewReportsPage" class="page">
+        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <div class="card">
+          <h2 class="card-title">All Reports</h2>
+          <div id="allReportsList"></div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer-quote">
+      <p><em>"Pharmacy today blends science, compassion, and technology."</em></p>
+      <p class="quote-author">— Dr. Shaker Alnufaie</p>
+      <p class="credit">Prepared by: Munirah Alsubaie</p>
+    </footer>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
