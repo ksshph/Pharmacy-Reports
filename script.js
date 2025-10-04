@@ -69,7 +69,7 @@ async function loadReports() {
     const snapshot = await db.collection("reports").get();
     reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
-‎    // ترتيب البيانات من الأحدث للأقدم
+    // Sort data from newest to oldest
     reports.sort((a, b) => {
       const dateA = new Date(a.date);
       const dateB = new Date(b.date);
