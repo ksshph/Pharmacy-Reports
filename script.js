@@ -52,7 +52,7 @@ document.getElementById('reportForm').addEventListener('submit', async (e) => {
   };
   
   try {
-    await db.collection("reports").add(newReport);
+    await db.collection("Shift Coordinator Report").add(newReport);
     alert("✅ Report saved successfully!");
     document.getElementById('reportForm').reset();
     showPage("latestReportsPage");
@@ -66,7 +66,7 @@ document.getElementById('reportForm').addEventListener('submit', async (e) => {
 // Load Reports from Firebase
 async function loadReports() {
   try {
-    const snapshot = await db.collection("reports").get();
+    const snapshot = await db.collection("Shift Coordinator Report").get();
     reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
     // Sort data from newest to oldest
