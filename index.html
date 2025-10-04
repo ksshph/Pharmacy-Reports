@@ -14,16 +14,18 @@
     </header>
 
     <main>
+      <!-- Home Page -->
       <div id="homePage" class="page active">
         <div class="buttons-card">
-          <button class="nav-btn add" onclick="showPage('addReport')">Add Report</button>
-          <button class="nav-btn latest" onclick="showPage('latestReports')">Latest Reports</button>
-          <button class="nav-btn view" onclick="showPage('viewReports')">View All Reports</button>
+          <button class="nav-btn add" onclick="showPage('addReportPage')">Add Report</button>
+          <button class="nav-btn latest" onclick="showPage('latestReportsPage')">Latest Reports</button>
+          <button class="nav-btn view" onclick="showPage('viewReportsPage')">View All Reports</button>
         </div>
       </div>
 
+      <!-- Add Report Page -->
       <div id="addReportPage" class="page">
-        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
         <div class="card">
           <h2 class="card-title">Add New Shift Report</h2>
           <form id="reportForm">
@@ -81,7 +83,7 @@
 
             <div class="form-group">
               <label>Shift Report *</label>
-              <textarea id="reportContent" required></textarea>
+              <textarea id="reportContent" rows="6" required></textarea>
             </div>
 
             <button type="submit" class="btn-submit">Save Report</button>
@@ -89,16 +91,18 @@
         </div>
       </div>
 
+      <!-- Latest Reports Page -->
       <div id="latestReportsPage" class="page">
-        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
         <div class="card">
           <h2 class="card-title">Latest Reports by Section</h2>
           <div id="latestReportsList"></div>
         </div>
       </div>
 
+      <!-- View All Reports Page -->
       <div id="viewReportsPage" class="page">
-        <button class="back-btn" onclick="showPage('home')">← Back</button>
+        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
         <div class="card">
           <h2 class="card-title">All Reports</h2>
           <div id="allReportsList"></div>
@@ -112,6 +116,11 @@
       <p class="credit">Prepared by: Munirah Alsubaie</p>
     </footer>
   </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+  
   <script src="script.js"></script>
 </body>
 </html>
