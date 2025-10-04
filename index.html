@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pharmacy Shift Report - NGHA</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-flex">
+      <div>
+        <h1>Pharmacy Shift Report</h1>
+        <p class="subtitle">National Guard Health Affairs — Pharmaceutical Care Services</p>
+      </div>
+      <div id="liveClock" class="clock"></div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="nav">
+      <button class="btn" id="goAdd">Add Report</button>
+      <button class="btn" id="goLatest">Latest Reports</button>
+      <button class="btn" id="goAll">View All Reports</button>
+    </div>
+
+    <!-- Add Report -->
+    <section id="page-add" class="card page hidden">
+      <div class="page-head">
+        <h2>Add New Shift Report</h2>
+        <button class="btn ghost" id="back1">← Back to Home</button>
+      </div>
+      <div class="form grid">
+        <input id="name" class="field" type="text" placeholder="Employee Name *" required />
+        <input id="badge" class="field" type="text" placeholder="Badge Number *" required />
+
+        <select id="section" class="field" required>
+          <option value="">Select Your Section *</option>
+          <option>Inpatient Pharmacy</option>
+          <option>Outpatient Pharmacy</option>
+          <option>Clinical Services</option>
+          <option>Material Management</option>
+          <option>OR Pharmacy</option>
+          <option>ER Pharmacy</option>
+          <option>IV</option>
+          <option>Other</option>
+        </select>
+
+        <select id="shift" class="field">
+          <option value="">Select Shift (Optional)</option>
+          <option>Morning</option>
+          <option>Evening</option>
+          <option>Night</option>
+        </select>
+
+        <select id="sendTo" class="field">
+          <option value="">Send to Section (Optional)</option>
+          <option>Inpatient Pharmacy</option>
+          <option>Outpatient Pharmacy</option>
+          <option>Clinical Services</option>
+          <option>Material Management</option>
+          <option>OR Pharmacy</option>
+          <option>ER Pharmacy</option>
+          <option>IV</option>
+          <option>Other</option>
+        </select>
+
+        <textarea id="report" class="field area" placeholder="Write your report here... *" required></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="saveBtn">Save Report</button>
+        <span id="saveStatus" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- Latest Reports -->
+    <section id="page-latest" class="page hidden">
+      <div class="page-head">
+        <h2>Latest Reports by Sections</h2>
+        <button class="btn ghost" id="back2">← Back to Home</button>
+      </div>
+      <div id="latestWrap" class="sections"></div>
+    </section>
+
+    <!-- All Reports -->
+    <section id="page-all" class="page hidden">
+      <div class="page-head">
+        <h2>All Reports</h2>
+        <button class="btn ghost" id="back3">← Back to Home</button>
+      </div>
+
+      <div class="filters card">
+        <select id="fSection" class="field">
+          <option value="">All Sections</option>
+          <option>Inpatient Pharmacy</option>
+          <option>Outpatient Pharmacy</option>
+          <option>Clinical Services</option>
+          <option>Material Management</option>
+          <option>OR Pharmacy</option>
+          <option>ER Pharmacy</option>
+          <option>IV</option>
+          <option>Other</option>
+        </select>
+        <select id="fShift" class="field">
+          <option value="">All Shifts</option>
+          <option>Morning</option>
+          <option>Evening</option>
+          <option>Night</option>
+        </select>
+        <input id="fFrom" class="field" type="date" />
+        <input id="fTo" class="field" type="date" />
+        <button class="btn" id="applyFilters">Apply Filters</button>
+        <button class="btn" id="exportCsv">Export CSV</button>
+      </div>
+
+      <div id="allList" class="reports"></div>
+    </section>
+
+    <blockquote class="quote">
+      <em>“Pharmacy today blends science, compassion, and technology. Whenever you think of health… think of pharmacists.”</em><br />
+      — Dr. Shaker Alnufaie, Director of Pharmaceutical Care Services
+    </blockquote>
+  </main>
+
+  <!-- Modal -->
+  <dialog id="modal">
+    <div class="modal-head">
+      <h3 id="modalTitle">Latest</h3>
+      <button class="btn small" id="modalClose">Close</button>
+    </div>
+    <div id="modalBody" class="reports modal-body"></div>
+  </dialog>
+
+  <footer class="tiny-credit">Prepared by: Munirah Alsubaie</footer>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
