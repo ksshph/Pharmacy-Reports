@@ -131,6 +131,64 @@ body {
   color: #1e40af;
 }
 
+/* Filter Card */
+.filter-card {
+  background: #f0f9ff;
+  border: 2px solid #bfdbfe;
+}
+
+.filter-controls {
+  margin-top: 15px;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.btn-filter,
+.btn-reset,
+.btn-export,
+.btn-export-all {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-filter {
+  background: linear-gradient(135deg, #3b82f6, #60a5fa);
+  color: white;
+}
+
+.btn-reset {
+  background: #64748b;
+  color: white;
+}
+
+.btn-export {
+  background: linear-gradient(135deg, #10b981, #34d399);
+  color: white;
+}
+
+.btn-export-all {
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  color: white;
+}
+
+.btn-filter:hover,
+.btn-reset:hover,
+.btn-export:hover,
+.btn-export-all:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 /* Form Styles */
 .form-row {
   display: grid;
@@ -173,7 +231,9 @@ body {
 
 .form-group textarea {
   resize: vertical;
-  min-height: 120px;
+  min-height: 150px;
+  max-height: 500px;
+  line-height: 1.6;
 }
 
 /* Submit Button */
@@ -291,6 +351,13 @@ body {
   margin-top: 10px;
 }
 
+/* Report Count Badge */
+#reportCount {
+  font-size: 16px;
+  color: #64748b;
+  font-weight: normal;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .container {
@@ -317,6 +384,17 @@ body {
 
   .card-title {
     font-size: 20px;
+  }
+
+  .filter-buttons {
+    flex-direction: column;
+  }
+
+  .btn-filter,
+  .btn-reset,
+  .btn-export,
+  .btn-export-all {
+    width: 100%;
   }
 }
 
