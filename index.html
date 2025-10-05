@@ -83,7 +83,7 @@
 
             <div class="form-group">
               <label>Shift Report *</label>
-              <textarea id="reportContent" rows="6" required></textarea>
+              <textarea id="reportContent" rows="10" required></textarea>
             </div>
 
             <button type="submit" class="btn-submit">Save Report</button>
@@ -103,8 +103,61 @@
       <!-- View All Reports Page -->
       <div id="viewReportsPage" class="page">
         <button class="back-btn" onclick="showPage('homePage')">← Back</button>
+        
+        <!-- Filter Section -->
+        <div class="card filter-card">
+          <h2 class="card-title">Filter Reports</h2>
+          
+          <div class="filter-controls">
+            <div class="form-row">
+              <div class="form-group">
+                <label>From Date</label>
+                <input type="date" id="filterStartDate" />
+              </div>
+              <div class="form-group">
+                <label>To Date</label>
+                <input type="date" id="filterEndDate" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Section</label>
+                <select id="filterSection">
+                  <option value="">All Sections</option>
+                  <option>Inpatient Pharmacy</option>
+                  <option>Outpatient Pharmacy</option>
+                  <option>Clinical Services</option>
+                  <option>Material Management</option>
+                  <option>OR Pharmacy</option>
+                  <option>ER Pharmacy</option>
+                  <option>IV</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Shift</label>
+                <select id="filterShift">
+                  <option value="">All Shifts</option>
+                  <option>Morning</option>
+                  <option>Evening</option>
+                  <option>Night</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="filter-buttons">
+              <button class="btn-filter" onclick="filterReports()">Apply Filter</button>
+              <button class="btn-reset" onclick="resetFilters()">Reset</button>
+              <button class="btn-export" onclick="exportFilteredToCSV()">Export Filtered to CSV</button>
+              <button class="btn-export-all" onclick="exportAllToCSV()">Export All to CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reports Display -->
         <div class="card">
-          <h2 class="card-title">All Reports</h2>
+          <h2 class="card-title">All Reports <span id="reportCount"></span></h2>
           <div id="allReportsList"></div>
         </div>
       </div>
