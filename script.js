@@ -14,6 +14,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 let reports = [];
+let filteredReports = [];
 
 // Badge color rules
 const badgeColors = {
@@ -52,7 +53,7 @@ document.getElementById('reportForm').addEventListener('submit', async (e) => {
   };
   
   try {
-    await db.collection("Shift Coordinator Report").add(newReport);
+    await db.collection("Shift Coordinator Reports").add(newReport);
     alert("✅ Report saved successfully!");
     document.getElementById('reportForm').reset();
     showPage("latestReportsPage");
@@ -66,7 +67,7 @@ document.getElementById('reportForm').addEventListener('submit', async (e) => {
 // Load Reports from Firebase
 async function loadReports() {
   try {
-    const snapshot = await db.collection("Shift Coordinator Report").get();
+    const snapshot = await db.collection("Shift Coordinator Reports").get();
     reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
     // Sort data from newest to oldest
@@ -76,11 +77,74 @@ async function loadReports() {
       return dateB - dateA;
     });
     
+    filteredReports = [...reports];
     displayLatest();
     displayAll();
+    updateReportCount();
   } catch (error) {
     console.error("Error loading reports:", error);
     alert("❌ Error loading reports");
+  }
+}
+
+// Filter Reports
+function filterReports() {
+  const startDate = document.getElementById('filterStartDate').value;
+  const endDate = document.getElementById('filterEndDate').value;
+  const selectedSection = document.getElementById('filterSection').value;
+  const selectedShift = document.getElementById('filterShift').value;
+  
+  filteredReports = reports.filter(report => {
+    const reportDate = new Date(report.date);
+    let matches = true;
+    
+    // Filter by start date
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      if (reportDate < start) matches = false;
+    }
+    
+    // Filter by end date
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      if (reportDate > end) matches = false;
+    }
+    
+    // Filter by section
+    if (selectedSection && selectedSection !== '') {
+      if (report.section !== selectedSection) matches = false;
+    }
+    
+    // Filter by shift
+    if (selectedShift && selectedShift !== '') {
+      if (report.shift !== selectedShift) matches = false;
+    }
+    
+    return matches;
+  });
+  
+  displayFilteredReports();
+  updateReportCount();
+}
+
+// Reset Filters
+function resetFilters() {
+  document.getElementById('filterStartDate').value = '';
+  document.getElementById('filterEndDate').value = '';
+  document.getElementById('filterSection').value = '';
+  document.getElementById('filterShift').value = '';
+  filteredReports = [...reports];
+  displayAll();
+  updateReportCount();
+}
+
+// Update Report Count
+function updateReportCount() {
+  const countElement = document.getElementById('reportCount');
+  if (countElement) {
+    countElement.textContent = `(${filteredReports.length} reports)`;
   }
 }
 
@@ -110,12 +174,17 @@ function displayLatest() {
 function displayAll() {
   const container = document.getElementById("allReportsList");
   
-  if (reports.length === 0) {
-    container.innerHTML = "<p style='text-align:center;color:#64748b;padding:20px;'>No reports yet. Add your first report!</p>";
+  if (filteredReports.length === 0) {
+    container.innerHTML = "<p style='text-align:center;color:#64748b;padding:20px;'>No reports match your filters.</p>";
     return;
   }
   
-  container.innerHTML = reports.map(r => renderReport(r)).join("");
+  container.innerHTML = filteredReports.map(r => renderReport(r)).join("");
+}
+
+// Display Filtered Reports
+function displayFilteredReports() {
+  displayAll();
 }
 
 // Render Single Report
@@ -132,9 +201,67 @@ function renderReport(r) {
       <p><strong>${r.employeeName}</strong> 
       <span class="${badgeClass}">${r.badgeNumber}</span> — ${r.section} — ${r.shift || 'N/A'}</p>
       <p style="font-size:12px;color:#64748b;">${displayDate}</p>
-      <p style="margin-top:10px;">${r.content}</p>
+      <p style="margin-top:10px;white-space:pre-wrap;">${r.content}</p>
       ${sendInfo}
     </div>`;
+}
+
+// Export Filtered Reports to CSV
+function exportFilteredToCSV() {
+  if (filteredReports.length === 0) {
+    alert("No reports to export!");
+    return;
+  }
+  exportToCSV(filteredReports, 'filtered_reports');
+}
+
+// Export All Reports to CSV
+function exportAllToCSV() {
+  if (reports.length === 0) {
+    alert("No reports to export!");
+    return;
+  }
+  exportToCSV(reports, 'all_reports');
+}
+
+// CSV Export Function
+function exportToCSV(data, filename) {
+  // CSV Headers
+  const headers = ['Date', 'Employee Name', 'Badge Number', 'Section', 'Shift', 'Send To', 'Report Content'];
+  
+  // Convert data to CSV rows
+  const csvRows = [headers.join(',')];
+  
+  data.forEach(report => {
+    const row = [
+      `"${report.dateDisplay || report.date}"`,
+      `"${report.employeeName}"`,
+      `"${report.badgeNumber}"`,
+      `"${report.section}"`,
+      `"${report.shift || 'N/A'}"`,
+      `"${report.sendTo || 'None'}"`,
+      `"${(report.content || '').replace(/"/g, '""')}"` // Escape quotes
+    ];
+    csvRows.push(row.join(','));
+  });
+  
+  // Create CSV content
+  const csvContent = csvRows.join('\n');
+  
+  // Create download link
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute('href', url);
+  link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  alert(`✅ Exported ${data.length} reports to CSV successfully!`);
 }
 
 // Load reports on page load
