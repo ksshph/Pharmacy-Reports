@@ -1,179 +1,176 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pharmacy Shift Report - NGHA</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pharmacy Shift Report</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-  <div class="container">
-    <header class="header-card">
-      <h1>Pharmacy Shift Report</h1>
-      <p>National Guard Health Affairs - Pharmaceutical Care Services</p>
-    </header>
 
-    <main>
-      <!-- Home Page -->
-      <div id="homePage" class="page active">
-        <div class="buttons-card">
-          <button class="nav-btn add" onclick="showPage('addReportPage')">Add Report</button>
-          <button class="nav-btn latest" onclick="showPage('latestReportsPage')">Latest Reports</button>
-          <button class="nav-btn view" onclick="showPage('viewReportsPage')">View All Reports</button>
-        </div>
-      </div>
+<div class="container">
 
-      <!-- Add Report Page -->
-      <div id="addReportPage" class="page">
-        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
-        <div class="card">
-          <h2 class="card-title">Add New Shift Report</h2>
-          <form id="reportForm">
-            <div class="form-row">
-              <div class="form-group">
-                <label>Employee Name *</label>
-                <input type="text" id="employeeName" required />
-              </div>
-              <div class="form-group">
-                <label>Badge Number *</label>
-                <input type="text" id="badgeNumber" required />
-              </div>
-            </div>
+<header class="header-card">
+  <h1>Pharmacy Shift Report</h1>
+  <p>National Guard Health Affairs</p>
+</header>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label>Section *</label>
-                <select id="section" required>
-                  <option value="">Select Section</option>
-                  <option>Inpatient Pharmacy</option>
-                  <option>Outpatient Pharmacy</option>
-                  <option>Clinical Services</option>
-                  <option>Material Management</option>
-                  <option>OR Pharmacy</option>
-                  <option>ER Pharmacy</option>
-                  <option>IV</option>
-                  <option>Other</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Shift</label>
-                <select id="shift">
-                  <option value="">Select Shift</option>
-                  <option>Morning</option>
-                  <option>Evening</option>
-                  <option>Night</option>
-                </select>
-              </div>
-            </div>
+<main>
 
-            <div class="form-group">
-              <label>Send to Section (Optional)</label>
-              <select id="sendToSection">
-                <option value="">Select Section</option>
-                <option>Inpatient Pharmacy</option>
-                <option>Outpatient Pharmacy</option>
-                <option>Clinical Services</option>
-                <option>Material Management</option>
-                <option>OR Pharmacy</option>
-                <option>ER Pharmacy</option>
-                <option>IV</option>
-                <option>Other</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Shift Report *</label>
-              <textarea id="reportContent" rows="10" required></textarea>
-            </div>
-
-            <button type="submit" class="btn-submit">Save Report</button>
-          </form>
-        </div>
-      </div>
-
-      <!-- Latest Reports Page -->
-      <div id="latestReportsPage" class="page">
-        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
-        <div class="card">
-          <h2 class="card-title">Latest Reports by Section</h2>
-          <div id="latestReportsList"></div>
-        </div>
-      </div>
-
-      <!-- View All Reports Page -->
-      <div id="viewReportsPage" class="page">
-        <button class="back-btn" onclick="showPage('homePage')">← Back</button>
-        
-        <!-- Filter Section -->
-        <div class="card filter-card">
-          <h2 class="card-title">Filter Reports</h2>
-          
-          <div class="filter-controls">
-            <div class="form-row">
-              <div class="form-group">
-                <label>From Date</label>
-                <input type="date" id="filterStartDate" />
-              </div>
-              <div class="form-group">
-                <label>To Date</label>
-                <input type="date" id="filterEndDate" />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="form-group">
-                <label>Section</label>
-                <select id="filterSection">
-                  <option value="">All Sections</option>
-                  <option>Inpatient Pharmacy</option>
-                  <option>Outpatient Pharmacy</option>
-                  <option>Clinical Services</option>
-                  <option>Material Management</option>
-                  <option>OR Pharmacy</option>
-                  <option>ER Pharmacy</option>
-                  <option>IV</option>
-                  <option>Other</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Shift</label>
-                <select id="filterShift">
-                  <option value="">All Shifts</option>
-                  <option>Morning</option>
-                  <option>Evening</option>
-                  <option>Night</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="filter-buttons">
-              <button class="btn-filter" onclick="filterReports()">Apply Filter</button>
-              <button class="btn-reset" onclick="resetFilters()">Reset</button>
-              <button class="btn-export" onclick="exportFilteredToCSV()">Export Filtered to CSV</button>
-              <button class="btn-export-all" onclick="exportAllToCSV()">Export All to CSV</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Reports Display -->
-        <div class="card">
-          <h2 class="card-title">All Reports <span id="reportCount"></span></h2>
-          <div id="allReportsList"></div>
-        </div>
-      </div>
-    </main>
-
-    <footer class="footer-quote">
-      <p><em>"Pharmacy today blends science, compassion, and technology."</em></p>
-      <p class="quote-author">— Dr. Shaker Alnufaie</p>
-      <p class="credit">Prepared by: Munirah Alsubaie</p>
-    </footer>
+<div id="homePage" class="page active">
+  <div class="buttons-card">
+    <button class="nav-btn add" onclick="showPage('addReportPage')">Add Report</button>
+    <button class="nav-btn latest" onclick="showPage('latestReportsPage')">Latest Reports</button>
+    <button class="nav-btn view" onclick="showPage('viewReportsPage')">View All Reports</button>
   </div>
+</div>
 
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  
-  <script src="script.js"></script>
+<div id="addReportPage" class="page">
+<button class="back-btn" onclick="showPage('homePage')">← Back</button>
+
+<div class="card">
+
+<h2 class="card-title">Add New Shift Report</h2>
+
+<div class="responsibility-alert">
+Shift report documentation is a responsibility of the shift coordinator and all staff involved in endorsements. Failure to document may lead to administrative action.
+</div>
+
+<form id="reportForm">
+
+<div class="form-row">
+<div class="form-group">
+<label>Employee Name *</label>
+<input type="text" id="employeeName" required>
+</div>
+
+<div class="form-group">
+<label>Badge Number *</label>
+<input type="text" id="badgeNumber" required>
+</div>
+</div>
+
+<div class="form-row">
+<div class="form-group">
+<label>Section *</label>
+<select id="section" required>
+<option value="">Select</option>
+<option>Inpatient Pharmacy</option>
+<option>Outpatient Pharmacy</option>
+<option>IV</option>
+<option>ER Pharmacy</option>
+<option>OR Pharmacy</option>
+<option>Clinical Services</option>
+<option>Material Management</option>
+</select>
+</div>
+
+<div class="form-group">
+<label>Shift *</label>
+<select id="shift" required>
+<option value="">Select</option>
+<option>Morning</option>
+<option>Evening</option>
+<option>Night</option>
+</select>
+</div>
+</div>
+
+<div class="generator-card">
+
+<h3>Shift Details</h3>
+
+<div class="form-group">
+<label>Staff present *</label>
+<textarea id="q_present" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Attendance updates *</label>
+<textarea id="q_absence" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Previous shift issues *</label>
+<textarea id="q_previous" required></textarea>
+</div>
+
+<div class="form-group">
+<label>New issues *</label>
+<textarea id="q_new" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Actions taken *</label>
+<textarea id="q_actions" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Endorsement to next shift *</label>
+<textarea id="q_next" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Endorsement Priority *</label>
+<select id="q_priority" required>
+<option value="">Select</option>
+<option>Normal</option>
+<option>Moderate</option>
+<option>Critical</option>
+</select>
+</div>
+
+<div class="form-group">
+<label>Additional notes *</label>
+<textarea id="q_notes" required></textarea>
+</div>
+
+<div class="form-group">
+<label>Medication shortage *</label>
+<select id="q_shortage" required>
+<option value="">Select</option>
+<option>Yes</option>
+<option>No</option>
+</select>
+</div>
+
+<button type="button" class="btn-generate" onclick="generateReport()">Generate Report</button>
+
+</div>
+
+<div class="form-group">
+<label>Report Preview *</label>
+<textarea id="reportContent" rows="12" required></textarea>
+</div>
+
+<button type="submit" class="btn-submit">Save Report</button>
+
+</form>
+</div>
+</div>
+
+<div id="latestReportsPage" class="page">
+<button class="back-btn" onclick="showPage('homePage')">← Back</button>
+<div class="card">
+<h2 class="card-title">Latest Reports</h2>
+<div id="latestReportsList"></div>
+</div>
+</div>
+
+<div id="viewReportsPage" class="page">
+<button class="back-btn" onclick="showPage('homePage')">← Back</button>
+<div class="card">
+<h2 class="card-title">All Reports</h2>
+<div id="allReportsList"></div>
+</div>
+</div>
+
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<script src="script.js"></script>
+
 </body>
 </html>
