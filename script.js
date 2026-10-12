@@ -8,27 +8,85 @@ const firebaseConfig = {
   measurementId: "G-WPJ95C048P"
 };
 
-firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
 const db = firebase.firestore();
+const reportsCollection = db.collection("Shift Coordinator Reports");
+
+const authorizedBadges = Object.freeze({
+  "9141896": "Dr. Shaker Al Nufaiee",
+  "1001011": "Ms. Munira Alsubaie",
+  "1000186": "Dr. Abdullah Alqurashi",
+  "7000195": "Dr. Amal Alghalbi",
+  "7000322": "Dr. Abdulrahman Altowairqi",
+  "403645": "Dr. Ayidh Alharthi",
+  "7000940": "Dr. Amani Alhumali",
+  "1003849": "Dr. Nawaf Alzaidi",
+  "1004054": "Dr. Abdulaziz Almutairi",
+  "7000547": "Mr. Faris Alzahrani",
+  "1003972": "Ms. Nidaa Alhumaidi",
+  "1003968": "Ms. Rahaf Alzaydani",
+  "7000375": "Dr. Rami Al Khaldi",
+  "5874336": "Dr. Sultan Alotaibi"
+});
+
+const followupStatuses = [
+  "Open",
+  "Under Processing",
+  "Closed"
+];
 
 let reports = [];
 let filteredReports = [];
 
+function getValue(id) {
+  const element = document.getElementById(id);
+  return element ? element.value.trim() : "";
+}
+
+function escapeHTML(value) {
+  return String(value ?? "").replace(
+    /[&<>"']/g,
+    character => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[character])
+  );
+}
+
+function getReportStatus(report) {
+  return followupStatuses.includes(report.followupStatus)
+    ? report.followupStatus
+    : "Open";
+}
+
+/* NAVIGATION */
+
 function showPage(pageId) {
-  document.querySelectorAll(".page").forEach(page => page.classList.remove("active"));
+  document.querySelectorAll(".page").forEach(page => {
+    page.classList.remove("active");
+  });
 
-  const page = document.getElementById(pageId);
-  if (page) page.classList.add("active");
+  const selectedPage = document.getElementById(pageId);
 
-  if (pageId === "latestReportsPage" || pageId === "viewReportsPage") {
+  if (selectedPage) {
+    selectedPage.classList.add("active");
+  }
+
+  if (
+    pageId === "latestReportsPage" ||
+    pageId === "viewReportsPage"
+  ) {
     loadReports();
   }
 }
 
-function getValue(id) {
-  const el = document.getElementById(id);
-  return el ? el.value.trim() : "";
-}
+/* GENERATE REPORT */
 
 function generateReport() {
   const requiredFields = [
@@ -49,83 +107,73 @@ function generateReport() {
 
   for (const field of requiredFields) {
     if (!getValue(field)) {
-      alert("Please complete all fields before generating the report.");
+      alert("Please complete all required fields.");
+      document.getElementById(field)?.focus();
       return;
     }
   }
 
-  const employeeName = getValue("employeeName");
-  const badgeNumber = getValue("badgeNumber");
-  const section = getValue("section");
-  const shift = getValue("shift");
-  const present = getValue("q_present");
-  const absence = getValue("q_absence");
-  const previous = getValue("q_previous");
-  const newIssues = getValue("q_new");
-  const actions = getValue("q_actions");
-  const next = getValue("q_next");
-  const priority = getValue("q_priority");
-  const notes = getValue("q_notes");
-  const shortage = getValue("q_shortage");
+  const reportText = `Pharmacy Shift Report
 
-  const shortageText = shortage === "Yes"
-    ? "Shortage reported."
-    : "No shortage reported.";
+Report prepared by ${getValue("employeeName")}, Badge Number ${getValue("badgeNumber")}, for ${getValue("section")}, ${getValue("shift")} shift.
 
-  const report = `Pharmacy Shift Report
+Staff present during the shift: ${getValue("q_present")}.
 
-Report prepared by ${employeeName}, Badge Number ${badgeNumber}, for ${section}, ${shift} shift.
+Attendance updates: ${getValue("q_absence")}.
 
-Staff present during the shift: ${present}.
+Endorsed issues from the previous shift: ${getValue("q_previous")}.
 
-Attendance updates: ${absence}.
+New or rising issues during the shift: ${getValue("q_new")}.
 
-Endorsed issues from the previous shift: ${previous}.
+Actions taken during the shift: ${getValue("q_actions")}.
 
-New or rising issues during the shift: ${newIssues}.
+Items to be endorsed to the next shift: ${getValue("q_next")}.
 
-Actions taken during the shift: ${actions}.
+Priority level: ${getValue("q_priority")}.
 
-Items to be endorsed to the next shift: ${next}.
+Additional notes: ${getValue("q_notes")}.
 
-Priority level: ${priority}.
+Medication shortage status: ${
+    getValue("q_shortage") === "Yes"
+      ? "Shortage reported."
+      : "No shortage reported."
+  }`;
 
-Additional notes: ${notes}.
-
-Medication shortage status: ${shortageText}`;
-
-  document.getElementById("reportContent").value = report;
+  document.getElementById("reportContent").value = reportText;
 }
+
+/* SAVE NEW REPORT */
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("reportForm");
 
   if (form) {
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
 
-      const reportContent = getValue("reportContent");
-
-      if (!reportContent) {
+      if (!getValue("reportContent")) {
         alert("Please generate the report before saving.");
         return;
       }
 
+      const submitButton = form.querySelector(
+        'button[type="submit"]'
+      );
+
+      if (submitButton) submitButton.disabled = true;
+
+      const now = new Date();
+
       const newReport = {
-        date: new Date().toISOString(),
-        dateDisplay: new Date().toLocaleString("en-US", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        }),
+        date: now.toISOString(),
+        dateDisplay: now.toLocaleString("en-US"),
         employeeName: getValue("employeeName"),
         badgeNumber: getValue("badgeNumber"),
         section: getValue("section"),
         shift: getValue("shift"),
         priority: getValue("q_priority"),
-        content: reportContent,
+        content: getValue("reportContent"),
+
         structuredAnswers: {
           present: getValue("q_present"),
           attendanceUpdates: getValue("q_absence"),
@@ -136,19 +184,26 @@ document.addEventListener("DOMContentLoaded", () => {
           priority: getValue("q_priority"),
           additionalNotes: getValue("q_notes"),
           medicationShortage: getValue("q_shortage")
-        }
+        },
+
+        followupStatus: "Open",
+        followupActions: []
       };
 
       try {
-        await db.collection("Shift Coordinator Reports").add(newReport);
+        await reportsCollection.add(newReport);
+
         alert("Report saved successfully.");
+
         form.reset();
-        document.getElementById("reportContent").value = "";
         showPage("latestReportsPage");
-        loadReports();
+
       } catch (error) {
-        console.error("Error saving report:", error);
-        alert("Error saving report. Please try again.");
+        console.error("Report save error:", error);
+        alert("Unable to save report. Check Firebase permissions.");
+
+      } finally {
+        if (submitButton) submitButton.disabled = false;
       }
     });
   }
@@ -156,106 +211,252 @@ document.addEventListener("DOMContentLoaded", () => {
   loadReports();
 });
 
+/* LOAD REPORTS */
+
 function sortReports(data) {
-  const priorityRank = {
+  const priorityRanks = {
     Critical: 1,
     Moderate: 2,
     Normal: 3
   };
 
-  return data.sort((a, b) => {
-    const rankA = priorityRank[a.priority] || 4;
-    const rankB = priorityRank[b.priority] || 4;
+  return [...data].sort((a, b) => {
+    const priorityDifference =
+      (priorityRanks[a.priority] || 4) -
+      (priorityRanks[b.priority] || 4);
 
-    if (rankA !== rankB) {
-      return rankA - rankB;
+    if (priorityDifference !== 0) {
+      return priorityDifference;
     }
 
-    return new Date(b.date) - new Date(a.date);
+    return (
+      new Date(b.date).getTime() -
+      new Date(a.date).getTime()
+    );
   });
 }
 
 async function loadReports() {
   try {
-    const snapshot = await db.collection("Shift Coordinator Reports").get();
+    const snapshot = await reportsCollection.get();
 
-    reports = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    reports = sortReports(
+      snapshot.docs.map(documentSnapshot => ({
+        ...documentSnapshot.data(),
+        id: documentSnapshot.id
+      }))
+    );
 
-    reports = sortReports(reports);
     filteredReports = [...reports];
 
     displayLatest();
     displayAll();
     updateReportCount();
+
   } catch (error) {
-    console.error("Error loading reports:", error);
+    console.error("Firebase loading error:", error);
+
+    const latestContainer = document.getElementById(
+      "latestReportsList"
+    );
+
+    const allContainer = document.getElementById(
+      "allReportsList"
+    );
+
+    if (latestContainer) {
+      latestContainer.textContent =
+        "Unable to load reports. Check Firebase access.";
+    }
+
+    if (allContainer) {
+      allContainer.textContent =
+        "Unable to load reports. Check Firebase access.";
+    }
   }
 }
 
-function displayLatest() {
-  const container = document.getElementById("latestReportsList");
-  if (!container) return;
+/* REPORT DISPLAY */
 
-  if (reports.length === 0) {
-    container.innerHTML = "<p class='empty-msg'>No reports yet.</p>";
-    return;
-  }
+function renderReport(report) {
+  const priority = ["Normal", "Moderate", "Critical"]
+    .includes(report.priority)
+      ? report.priority
+      : "Normal";
 
-  const sections = [...new Set(reports.map(r => r.section || "Unspecified Section"))];
+  const status = getReportStatus(report);
 
-  container.innerHTML = "";
+  const statusClass = status
+    .toLowerCase()
+    .replace(/\s+/g, "-");
 
-  sections.forEach(section => {
-    const latest = reports
-      .filter(r => (r.section || "Unspecified Section") === section)
-      .slice(0, 3);
+  const actions = Array.isArray(report.followupActions)
+    ? report.followupActions
+    : [];
 
-    container.innerHTML += `
-      <div class="section-block">
-        <h3>${section}</h3>
-        ${latest.map(r => renderReport(r)).join("")}
-      </div>
-    `;
-  });
-}
-
-function displayAll() {
-  const container = document.getElementById("allReportsList");
-  if (!container) return;
-
-  if (filteredReports.length === 0) {
-    container.innerHTML = "<p class='empty-msg'>No reports found.</p>";
-    return;
-  }
-
-  container.innerHTML = filteredReports.map(r => renderReport(r)).join("");
-}
-
-function renderReport(r) {
-  const priority = r.priority || "Normal";
-  const priorityClass = priority === "Critical"
-    ? "critical"
-    : priority === "Moderate"
-      ? "moderate"
-      : "normal";
+  const actionHistory = actions.length
+    ? actions.map(entry => `
+        <div class="action-entry">
+          <strong>${escapeHTML(entry.name || "Unknown")}</strong>:
+          ${escapeHTML(entry.action || "")}
+          <small>${escapeHTML(entry.date || "")}</small>
+        </div>
+      `).join("")
+    : '<p class="muted">No follow-up actions yet.</p>';
 
   return `
-    <div class="report-item ${priorityClass}">
+    <div
+      class="report-item ${priority.toLowerCase()}"
+      data-report-id="${escapeHTML(report.id)}"
+    >
+
       <div class="report-header">
         <div>
-          <strong>${r.employeeName || "N/A"}</strong>
-          <span>— ${r.section || "N/A"} — ${r.shift || "N/A"}</span>
+          <strong>${escapeHTML(report.employeeName || "N/A")}</strong>
+          <span>
+            ${escapeHTML(report.section || "N/A")}
+            â
+            ${escapeHTML(report.shift || "N/A")}
+          </span>
         </div>
-        <span class="priority-badge ${priorityClass}">${priority}</span>
+
+        <span class="priority-badge ${priority.toLowerCase()}">
+          ${escapeHTML(priority)}
+        </span>
       </div>
-      <p class="report-date">${r.dateDisplay || r.date || ""}</p>
-      <p class="report-content">${r.content || ""}</p>
+
+      <p class="report-date">
+        ${escapeHTML(report.dateDisplay || report.date || "")}
+      </p>
+
+      <p class="report-content">
+        ${escapeHTML(report.content || "")}
+      </p>
+
+      <div class="followup-panel">
+
+        <div class="followup-heading">
+          <strong>Report Follow-up</strong>
+
+          <span class="status-pill ${statusClass}">
+            ${escapeHTML(status)}
+          </span>
+        </div>
+
+        <div class="action-history">
+          ${actionHistory}
+        </div>
+
+        ${
+          status === "Closed"
+            ? `
+              <p class="closed-by">
+                Closed by: ${escapeHTML(report.closedBy || "Unknown")}
+              </p>
+            `
+            : ""
+        }
+
+        <div class="followup-editor">
+
+          <label>Badge Number</label>
+          <input
+            type="password"
+            inputmode="numeric"
+            autocomplete="off"
+            class="followup-badge"
+            placeholder="Enter badge number"
+          >
+
+          <label>Action Taken</label>
+          <textarea
+            class="followup-action"
+            rows="3"
+            placeholder="Enter action taken..."
+          ></textarea>
+
+          <label>Report Status</label>
+          <select class="followup-status">
+            ${
+              followupStatuses.map(item => `
+                <option
+                  value="${item}"
+                  ${item === status ? "selected" : ""}
+                >
+                  ${item}
+                </option>
+              `).join("")
+            }
+          </select>
+
+          <button
+            type="button"
+            class="followup-save"
+          >
+            Save Follow-up
+          </button>
+
+          <span
+            class="followup-message"
+            role="status"
+          ></span>
+
+        </div>
+      </div>
     </div>
   `;
 }
+
+/* LATEST REPORTS */
+
+function displayLatest() {
+  const container = document.getElementById(
+    "latestReportsList"
+  );
+
+  if (!container) return;
+
+  if (reports.length === 0) {
+    container.innerHTML =
+      '<p class="empty-msg">No reports yet.</p>';
+    return;
+  }
+
+  const sections = [
+    ...new Set(
+      reports.map(report => report.section || "Other")
+    )
+  ];
+
+  container.innerHTML = sections.map(section => {
+    const sectionReports = reports
+      .filter(report => (report.section || "Other") === section)
+      .slice(0, 3);
+
+    return `
+      <div class="section-block">
+        <h3>${escapeHTML(section)}</h3>
+        ${sectionReports.map(renderReport).join("")}
+      </div>
+    `;
+  }).join("");
+}
+
+/* ALL REPORTS */
+
+function displayAll() {
+  const container = document.getElementById(
+    "allReportsList"
+  );
+
+  if (!container) return;
+
+  container.innerHTML = filteredReports.length
+    ? filteredReports.map(renderReport).join("")
+    : '<p class="empty-msg">No reports found.</p>';
+}
+
+/* FILTERS */
 
 function filterReports() {
   const startDate = getValue("filterStartDate");
@@ -266,69 +467,232 @@ function filterReports() {
 
   filteredReports = reports.filter(report => {
     const reportDate = new Date(report.date);
-    let match = true;
 
     if (startDate) {
-      const start = new Date(startDate);
-      start.setHours(0, 0, 0, 0);
-      if (reportDate < start) match = false;
+      const start = new Date(`${startDate}T00:00:00`);
+
+      if (reportDate < start) return false;
     }
 
     if (endDate) {
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      if (reportDate > end) match = false;
+      const end = new Date(`${endDate}T23:59:59`);
+
+      if (reportDate > end) return false;
     }
 
-    if (selectedSection && report.section !== selectedSection) match = false;
-    if (selectedShift && report.shift !== selectedShift) match = false;
-    if (selectedPriority && report.priority !== selectedPriority) match = false;
+    if (
+      selectedSection &&
+      report.section !== selectedSection
+    ) return false;
 
-    return match;
+    if (
+      selectedShift &&
+      report.shift !== selectedShift
+    ) return false;
+
+    if (
+      selectedPriority &&
+      report.priority !== selectedPriority
+    ) return false;
+
+    return true;
   });
 
   filteredReports = sortReports(filteredReports);
+
   displayAll();
   updateReportCount();
 }
 
 function resetFilters() {
-  const ids = [
+  [
     "filterStartDate",
     "filterEndDate",
     "filterSection",
     "filterShift",
     "filterPriority"
-  ];
+  ].forEach(id => {
+    const element = document.getElementById(id);
 
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = "";
+    if (element) element.value = "";
   });
 
   filteredReports = [...reports];
+
   displayAll();
   updateReportCount();
 }
 
 function updateReportCount() {
-  const countElement = document.getElementById("reportCount");
+  const countElement = document.getElementById(
+    "reportCount"
+  );
+
   if (countElement) {
-    countElement.textContent = `(${filteredReports.length} reports)`;
+    countElement.textContent =
+      `(${filteredReports.length} reports)`;
   }
 }
 
+/* SAVE FOLLOW-UP */
+
+document.addEventListener("click", event => {
+  const button = event.target.closest(".followup-save");
+
+  if (button) {
+    saveFollowup(button);
+  }
+});
+
+async function saveFollowup(button) {
+  const card = button.closest(".report-item");
+  const panel = button.closest(".followup-panel");
+
+  if (!card || !panel) return;
+
+  const badge = panel.querySelector(
+    ".followup-badge"
+  ).value.trim();
+
+  const action = panel.querySelector(
+    ".followup-action"
+  ).value.trim();
+
+  const status = panel.querySelector(
+    ".followup-status"
+  ).value;
+
+  const message = panel.querySelector(
+    ".followup-message"
+  );
+
+  const employeeName = authorizedBadges[badge];
+
+  if (!employeeName) {
+    message.textContent = "Unauthorized badge number.";
+    return;
+  }
+
+  if (!followupStatuses.includes(status)) {
+    message.textContent = "Invalid report status.";
+    return;
+  }
+
+  if (action.length > 3000) {
+    message.textContent = "Action text is too long.";
+    return;
+  }
+
+  const reportId = card.dataset.reportId;
+
+  const currentReport = reports.find(
+    report => report.id === reportId
+  );
+
+  if (!currentReport) {
+    message.textContent =
+      "Report not found. Refresh and try again.";
+    return;
+  }
+
+  if (
+    !action &&
+    status === getReportStatus(currentReport)
+  ) {
+    message.textContent =
+      "Enter an action or change the report status.";
+    return;
+  }
+
+  button.disabled = true;
+  message.textContent = "Saving...";
+
+  try {
+    const reportReference = reportsCollection.doc(reportId);
+
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(
+        reportReference
+      );
+
+      if (!snapshot.exists) {
+        throw new Error("Report not found.");
+      }
+
+      const data = snapshot.data();
+
+      const previousStatus = getReportStatus(data);
+      const now = new Date().toISOString();
+
+      const actionHistory = Array.isArray(
+        data.followupActions
+      )
+        ? [...data.followupActions]
+        : [];
+
+      if (action) {
+        actionHistory.push({
+          name: employeeName,
+          action: action,
+          date: now
+        });
+      }
+
+      const update = {
+        followupActions: actionHistory,
+        followupStatus: status,
+        lastUpdatedBy: employeeName,
+        lastUpdatedAt: now
+      };
+
+      if (status === "Closed") {
+        update.closedBy =
+          previousStatus === "Closed" && data.closedBy
+            ? data.closedBy
+            : employeeName;
+
+        update.closedAt =
+          previousStatus === "Closed" && data.closedAt
+            ? data.closedAt
+            : now;
+      } else {
+        update.closedBy = null;
+        update.closedAt = null;
+      }
+
+      transaction.update(reportReference, update);
+    });
+
+    await loadReports();
+
+  } catch (error) {
+    console.error("Follow-up save error:", error);
+
+    message.textContent =
+      "Unable to save. Check Firebase permissions.";
+
+    button.disabled = false;
+  }
+}
+
+/* EXCEL EXPORT */
+
 function exportFilteredToCSV() {
-  exportToCSV(filteredReports, "filtered_reports");
+  exportToExcel(filteredReports, "filtered_reports");
 }
 
 function exportAllToCSV() {
-  exportToCSV(reports, "all_reports");
+  exportToExcel(reports, "all_reports");
 }
 
-function exportToCSV(data, filename) {
+function exportToExcel(data, filename) {
   if (!data || data.length === 0) {
     alert("No reports to export.");
+    return;
+  }
+
+  if (typeof XLSX === "undefined") {
+    alert("Excel library is not loaded.");
     return;
   }
 
@@ -339,36 +703,136 @@ function exportToCSV(data, filename) {
     "Section",
     "Shift",
     "Priority",
-    "Report Content"
+    "Report Content",
+    "Action Taken",
+    "Status",
+    "Closed By",
+    "Last Updated By"
   ];
 
-  const rows = [headers.join(",")];
+  const rows = [headers];
 
   data.forEach(report => {
+    const actions = Array.isArray(
+      report.followupActions
+    )
+      ? report.followupActions
+      : [];
+
+    const actionText = actions.map(entry =>
+      `${entry.name || "Unknown"}: ${entry.action || ""}`
+    ).join("\n");
+
     rows.push([
-      `"${report.dateDisplay || report.date || ""}"`,
-      `"${report.employeeName || ""}"`,
-      `"${report.badgeNumber || ""}"`,
-      `"${report.section || ""}"`,
-      `"${report.shift || ""}"`,
-      `"${report.priority || ""}"`,
-      `"${(report.content || "").replace(/"/g, '""')}"`
-    ].join(","));
+      report.dateDisplay || report.date || "",
+      report.employeeName || "",
+      report.badgeNumber || "",
+      report.section || "",
+      report.shift || "",
+      report.priority || "",
+      report.content || "",
+      actionText,
+      getReportStatus(report),
+      report.closedBy || "",
+      report.lastUpdatedBy || ""
+    ]);
   });
 
-  const csvContent = rows.join("\n");
-  const blob = new Blob([csvContent], {
-    type: "text/csv;charset=utf-8;"
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+
+  worksheet["!cols"] = [
+    { wch: 22 },
+    { wch: 26 },
+    { wch: 16 },
+    { wch: 24 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 65 },
+    { wch: 75 },
+    { wch: 22 },
+    { wch: 26 },
+    { wch: 26 }
+  ];
+
+  const statusColors = {
+    Open: "FFFCE0E0",
+    "Under Processing": "FFFFF0C2",
+    Closed: "FFDDF3E3"
+  };
+
+  rows.forEach((row, rowIndex) => {
+    row.forEach((value, columnIndex) => {
+      const address = XLSX.utils.encode_cell({
+        r: rowIndex,
+        c: columnIndex
+      });
+
+      const cell = worksheet[address];
+
+      if (!cell) return;
+
+      cell.s = {
+        alignment: {
+          vertical: "top",
+          wrapText: true
+        }
+      };
+
+      if (rowIndex === 0) {
+        cell.s.fill = {
+          fgColor: {
+            rgb: "FF0F2A44"
+          }
+        };
+
+        cell.s.font = {
+          bold: true,
+          color: {
+            rgb: "FFFFFFFF"
+          }
+        };
+      } else if (columnIndex === 8) {
+        const status = getReportStatus(
+          data[rowIndex - 1]
+        );
+
+        cell.s.fill = {
+          fgColor: {
+            rgb: statusColors[status]
+          }
+        };
+
+        cell.s.font = {
+          bold: true
+        };
+      }
+    });
   });
 
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
+  worksheet["!rows"] = rows.map((row, index) => ({
+    hpt: index === 0
+      ? 30
+      : Math.min(
+          180,
+          Math.max(
+            35,
+            20 * (
+              String(row[7] || "").split("\n").length + 1
+            )
+          )
+        )
+  }));
 
-  link.href = url;
-  link.download = `${filename}_${new Date().toISOString().split("T")[0]}.csv`;
-  link.style.display = "none";
+  const workbook = XLSX.utils.book_new();
 
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    "Shift Reports"
+  );
+
+  XLSX.writeFile(
+    workbook,
+    `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
 }
