@@ -1,10 +1,17 @@
 <!DOCTYPE html>
+
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>Pharmacy Shift Report</title>
+
   <link rel="stylesheet" href="style.css">
+
 </head>
 
 <body>
@@ -12,274 +19,535 @@
 <div class="container">
 
   <header class="header-card">
+
     <h1>Pharmacy Shift Report</h1>
+
     <p>National Guard Health Affairs</p>
+
   </header>
 
   <main>
 
-    <!-- HOME PAGE -->
     <div id="homePage" class="page active">
+
       <div class="buttons-card">
-        <button class="nav-btn add" onclick="showPage('addReportPage')">
-          Add Report
-        </button>
 
-        <button class="nav-btn latest" onclick="showPage('latestReportsPage')">
-          Latest Reports
-        </button>
+        <button class="nav-btn add" onclick="showPage('addReportPage')">Add Report</button>
 
-        <button class="nav-btn view" onclick="showPage('viewReportsPage')">
-          View All Reports
-        </button>
+        <button class="nav-btn latest" onclick="showPage('latestReportsPage')">Latest Reports</button>
+
+        <button class="nav-btn view" onclick="showPage('viewReportsPage')">View All Reports</button>
+
+        <button class="nav-btn view" onclick="showPage('weeklyMonitoringPage')">Weekly Monitoring</button>
+
       </div>
+
     </div>
 
-    <!-- ADD REPORT -->
     <div id="addReportPage" class="page">
-      <button class="back-btn" onclick="showPage('homePage')">
-        ← Back
-      </button>
+
+      <button class="back-btn" onclick="showPage('homePage')">← Back</button>
 
       <div class="card">
+
         <h2 class="card-title">Add New Shift Report</h2>
 
         <div class="responsibility-alert">
-          Shift report documentation is a core responsibility of the shift
-          coordinator, as well as every staff member with an endorsement
-          or any operational information that must be communicated and
-          documented during the shift. Failure to properly document
-          endorsements or significant operational updates may result in
-          the appropriate administrative action.
+
+          Shift report documentation is a core responsibility of the shift coordinator, as well as every staff member with an endorsement or any operational information that must be communicated and documented during the shift. Failure to properly document endorsements or significant operational updates may result in the appropriate administrative action.
+
         </div>
 
         <form id="reportForm">
 
           <div class="form-row">
+
             <div class="form-group">
-              <label for="employeeName">Employee Name *</label>
+
+              <label>Employee Name *</label>
+
               <input type="text" id="employeeName" required>
+
             </div>
 
             <div class="form-group">
-              <label for="badgeNumber">Badge Number *</label>
+
+              <label>Badge Number *</label>
+
               <input type="text" id="badgeNumber" required>
+
             </div>
+
           </div>
 
           <div class="form-row">
+
             <div class="form-group">
-              <label for="section">Section *</label>
+
+              <label>Section *</label>
+
               <select id="section" required>
-                <option value="">Select Section</option>
+
+                <option value="">Select</option>
+
                 <option>Inpatient Pharmacy</option>
+
                 <option>Outpatient Pharmacy</option>
-                <option>Clinical Services</option>
-                <option>Material Management</option>
-                <option>OR Pharmacy</option>
-                <option>ER Pharmacy</option>
+
                 <option>IV</option>
-                <option>Other</option>
+
+                <option>ER Pharmacy</option>
+
+                <option>OR Pharmacy</option>
+
+                <option>Clinical Services</option>
+
+                <option>Material Management</option>
+
               </select>
+
             </div>
 
             <div class="form-group">
-              <label for="shift">Shift *</label>
+
+              <label>Shift *</label>
+
               <select id="shift" required>
-                <option value="">Select Shift</option>
+
+                <option value="">Select</option>
+
                 <option>Morning</option>
+
                 <option>Evening</option>
+
                 <option>Night</option>
+
               </select>
+
             </div>
+
           </div>
 
           <div class="generator-card">
+
             <h3>Shift Details</h3>
 
             <div class="form-group">
-              <label for="q_present">Staff Present *</label>
+
+              <label>Staff present *</label>
+
               <textarea id="q_present" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_absence">Attendance Updates *</label>
+
+              <label>Attendance updates *</label>
+
               <textarea id="q_absence" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_previous">Previous Shift Issues *</label>
+
+              <label>Previous shift issues *</label>
+
               <textarea id="q_previous" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_new">New Issues *</label>
+
+              <label>New issues *</label>
+
               <textarea id="q_new" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_actions">Actions Taken During Shift *</label>
+
+              <label>Actions taken *</label>
+
               <textarea id="q_actions" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_next">Endorsement to Next Shift *</label>
+
+              <label>Endorsement to next shift *</label>
+
               <textarea id="q_next" required></textarea>
+
             </div>
 
             <div class="form-group">
-              <label for="q_priority">Endorsement Priority *</label>
+
+              <label>Endorsement Priority *</label>
+
               <select id="q_priority" required>
-                <option value="">Select Priority</option>
-                <option>Normal</option>
-                <option>Moderate</option>
-                <option>Critical</option>
-              </select>
-            </div>
 
-            <div class="form-group">
-              <label for="q_notes">Additional Notes *</label>
-              <textarea id="q_notes" required></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="q_shortage">Medication Shortage *</label>
-              <select id="q_shortage" required>
                 <option value="">Select</option>
-                <option>Yes</option>
-                <option>No</option>
+
+                <option>Normal</option>
+
+                <option>Moderate</option>
+
+                <option>Critical</option>
+
               </select>
+
             </div>
 
-            <button type="button" class="btn-generate"
-                    onclick="generateReport()">
+            <div class="form-group">
+
+              <label>Additional notes *</label>
+
+              <textarea id="q_notes" required></textarea>
+
+            </div>
+
+            <div class="form-group">
+
+              <label>Medication shortage *</label>
+
+              <select id="q_shortage" required>
+
+                <option value="">Select</option>
+
+                <option>Yes</option>
+
+                <option>No</option>
+
+              </select>
+
+            </div>
+
+            <div class="card" style="margin:16px 0">
+
+              <h3>Individual Issues / Endorsements</h3>
+
+              <div id="issueInputs"></div>
+
+              <button type="button" id="addIssueBtn" class="btn-filter">
+
+                + Add Issue
+
+              </button>
+
+            </div>
+
+            <button type="button" class="btn-generate" onclick="generateReport()">
+
               Generate Report
+
             </button>
+
           </div>
 
           <div class="form-group">
-            <label for="reportContent">Report Preview *</label>
+
+            <label>Report Preview *</label>
+
             <textarea id="reportContent" rows="12" required></textarea>
+
           </div>
 
-          <button type="submit" class="btn-submit">
-            Save Report
-          </button>
+          <button type="submit" class="btn-submit">Save Report</button>
 
         </form>
+
       </div>
+
     </div>
 
-    <!-- LATEST REPORTS -->
     <div id="latestReportsPage" class="page">
-      <button class="back-btn" onclick="showPage('homePage')">
-        ← Back
-      </button>
+
+      <button class="back-btn" onclick="showPage('homePage')">← Back</button>
 
       <div class="card">
+
         <h2 class="card-title">Latest Reports</h2>
+
         <div id="latestReportsList"></div>
+
       </div>
+
     </div>
 
-    <!-- ALL REPORTS -->
     <div id="viewReportsPage" class="page">
-      <button class="back-btn" onclick="showPage('homePage')">
-        ← Back
-      </button>
+
+      <button class="back-btn" onclick="showPage('homePage')">← Back</button>
 
       <div class="card filter-card">
+
         <h2 class="card-title">Filter Reports</h2>
 
         <div class="form-row">
+
           <div class="form-group">
-            <label for="filterStartDate">From Date</label>
+
+            <label>From Date</label>
+
             <input type="date" id="filterStartDate">
+
           </div>
 
           <div class="form-group">
-            <label for="filterEndDate">To Date</label>
+
+            <label>To Date</label>
+
             <input type="date" id="filterEndDate">
+
           </div>
+
         </div>
 
         <div class="form-row">
+
           <div class="form-group">
-            <label for="filterSection">Section</label>
+
+            <label>Section</label>
+
             <select id="filterSection">
+
               <option value="">All Sections</option>
+
               <option>Inpatient Pharmacy</option>
+
               <option>Outpatient Pharmacy</option>
-              <option>Clinical Services</option>
-              <option>Material Management</option>
-              <option>OR Pharmacy</option>
-              <option>ER Pharmacy</option>
+
               <option>IV</option>
-              <option>Other</option>
+
+              <option>ER Pharmacy</option>
+
+              <option>OR Pharmacy</option>
+
+              <option>Clinical Services</option>
+
+              <option>Material Management</option>
+
             </select>
+
           </div>
 
           <div class="form-group">
-            <label for="filterShift">Shift</label>
+
+            <label>Shift</label>
+
             <select id="filterShift">
+
               <option value="">All Shifts</option>
+
               <option>Morning</option>
+
               <option>Evening</option>
+
               <option>Night</option>
+
             </select>
+
           </div>
+
         </div>
 
         <div class="form-group">
-          <label for="filterPriority">Priority</label>
+
+          <label>Priority</label>
+
           <select id="filterPriority">
+
             <option value="">All Priorities</option>
+
             <option>Normal</option>
+
             <option>Moderate</option>
+
             <option>Critical</option>
+
           </select>
+
         </div>
 
         <div class="filter-buttons">
-          <button class="btn-filter" onclick="filterReports()">
-            Apply Filter
-          </button>
 
-          <button class="btn-reset" onclick="resetFilters()">
-            Reset
-          </button>
+          <button class="btn-filter" onclick="filterReports()">Apply Filter</button>
 
-          <button class="btn-export" onclick="exportFilteredToCSV()">
-            Export Filtered to Excel
-          </button>
+          <button class="btn-reset" onclick="resetFilters()">Reset</button>
 
-          <button class="btn-export-all" onclick="exportAllToCSV()">
-            Export All
-          </button>
+          <button class="btn-export" onclick="exportFilteredToCSV()">Export Filtered to Excel</button>
+
+          <button class="btn-export-all" onclick="exportAllToCSV()">Export All</button>
+
         </div>
+
       </div>
 
       <div class="card">
+
         <h2 class="card-title">
+
           All Reports <span id="reportCount"></span>
+
         </h2>
 
         <div id="allReportsList"></div>
+
       </div>
+
+    </div>
+
+    <div id="weeklyMonitoringPage" class="page">
+
+      <button class="back-btn" onclick="showPage('homePage')">← Back</button>
+
+      <div class="card">
+
+        <h2 class="card-title">Weekly Monitoring Dashboard</h2>
+
+        <p class="hint">
+
+          Each monitoring week starts Tuesday 12:00 AM and ends the following Tuesday 12:00 AM.
+
+        </p>
+
+        <div class="form-row">
+
+          <div class="form-group">
+
+            <label>Select date within monitoring week
+
+              <input type="date" id="monitoringWeek">
+
+            </label>
+
+          </div>
+
+          <div class="form-group">
+
+            <label>Section
+
+              <select id="monitoringSection">
+
+                <option value="">All Sections</option>
+
+                <option>Inpatient Pharmacy</option>
+
+                <option>Outpatient Pharmacy</option>
+
+                <option>IV</option>
+
+                <option>ER Pharmacy</option>
+
+                <option>OR Pharmacy</option>
+
+                <option>Clinical Services</option>
+
+                <option>Material Management</option>
+
+              </select>
+
+            </label>
+
+          </div>
+
+          <div class="form-group">
+
+            <label>Status
+
+              <select id="monitoringStatus">
+
+                <option value="">All Statuses</option>
+
+                <option>Open</option>
+
+                <option>Under Processing</option>
+
+                <option>Closed</option>
+
+              </select>
+
+            </label>
+
+          </div>
+
+        </div>
+
+        <div class="monitoring-summary">
+
+          <div>
+
+            Total Issues:
+
+            <strong id="monitoringTotal">0</strong>
+
+          </div>
+
+          <div>
+
+            Open / Processing:
+
+            <strong id="monitoringPending">0</strong>
+
+          </div>
+
+          <div>
+
+            Closed:
+
+            <strong id="monitoringClosed">0</strong>
+
+          </div>
+
+        </div>
+
+        <div class="table-scroll">
+
+          <table class="monitoring-table">
+
+            <thead>
+
+              <tr>
+
+                <th>Date</th>
+
+                <th>Section</th>
+
+                <th>Issue / Endorsement</th>
+
+                <th>Action Taken</th>
+
+                <th>Last Updated By</th>
+
+                <th>Status</th>
+
+                <th>Closed By</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody id="monitoringTableBody"></tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
     </div>
 
   </main>
+
 </div>
 
-<!-- FIREBASE -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
-<!-- EXCEL -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
-<!-- MAIN SCRIPT -->
 <script src="script.js"></script>
 
 </body>
+
 </html>
