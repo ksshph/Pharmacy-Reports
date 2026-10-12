@@ -1,452 +1,1235 @@
 const firebaseConfig = {
-  apiKey: 'AIzaSyBqgeFglHVOuP8-p1AIAIa3tBEonD5DPt8',
-  authDomain: 'pharmacyshift.firebaseapp.com',
-  projectId: 'pharmacyshift',
-  storageBucket: 'pharmacyshift.firebasestorage.app',
-  messagingSenderId: '628923818441',
-  appId: '1:628923818441:web:88f2a3554411b7ddbe4818',
-  measurementId: 'G-WPJ95C048P'
+  apiKey: "AIzaSyBqgeFglHVOuP8-p1AIAIa3tBEonD5DPt8",
+  authDomain: "pharmacyshift.firebaseapp.com",
+  projectId: "pharmacyshift",
+  storageBucket: "pharmacyshift.firebasestorage.app",
+  messagingSenderId: "628923818441",
+  appId: "1:628923818441:web:88f2a3554411b7ddbe4818",
+  measurementId: "G-WPJ95C048P"
 };
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
 const db = firebase.firestore();
-const reportsRef = db.collection('Shift Coordinator Reports');
-const issuesRef = db.collection('Shift Report Issues');
-const authorizedBadges = Object.freeze({
-  '9141896':'Dr. Shaker Al Nufaiee', '1001011':'Ms. Munira Alsubaie',
-  '1000186':'Dr. Abdullah Alqurashi', '7000195':'Dr. Amal Alghalbi',
-  '7000322':'Dr. Abdulrahman Altowairqi', '403645':'Dr. Ayidh Alharthi',
-  '7000940':'Dr. Amani Alhumali', '1003849':'Dr. Nawaf Alzaidi',
-  '1004054':'Dr. Abdulaziz Almutairi', '7000547':'Mr. Faris Alzahrani',
-  '1003972':'Ms. Nidaa Alhumaidi', '1003968':'Ms. Rahaf Alzaydani',
-  '7000375':'Dr. Rami Al Khaldi', '5874336':'Dr. Sultan Alotaibi'
-});
-const STATUSES = ['Open','Under Processing','Closed'];
-let reports = [], savedIssues = [], allIssues = [], filteredReports = [];
-const el = id => document.getElementById(id);
-const val = id => (el(id)?.value || '').trim();
-const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const toDate = x => {
-  if (!x) return null;
-  const d = typeof x.toDate === 'function' ? x.toDate() : new Date(x);
-  return Number.isFinite(d.getTime()) ? d : null;
+const reportsRef = db.collection("Shift Coordinator Reports");
+const issuesRef = db.collection("Shift Report Issues");
+
+const authorizedBadges = {
+  "9141896": "Dr. Shaker Al Nufaiee",
+  "1001011": "Ms. Munira Alsubaie",
+  "1000186": "Dr. Abdullah Alqurashi",
+  "7000195": "Dr. Amal Alghalbi",
+  "7000322": "Dr. Abdulrahman Altowairqi",
+  "403645": "Dr. Ayidh Alharthi",
+  "7000940": "Dr. Amani Alhumali",
+  "1003849": "Dr. Nawaf Alzaidi",
+  "1004054": "Dr. Abdulaziz Almutairi",
+  "7000547": "Mr. Faris Alzahrani",
+  "1003972": "Ms. Nidaa Alhumaidi",
+  "1003968": "Ms. Rahaf Alzaydani",
+  "7000375": "Dr. Rami Al Khaldi",
+  "5874336": "Dr. Sultan Alotaibi"
 };
-const reportDate = r => toDate(r.date || r.createdAt || r.timestamp);
-const issueDate = i => toDate(i.createdAt || i.date);
-const fmt = d => { const x = toDate(d); return x ? x.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'; };
-const statusOf = x => STATUSES.includes(x.status || x.followupStatus) ? (x.status || x.followupStatus) : 'Open';
-const statusTag = s => `<span class="status-pill ${esc(s.toLowerCase().replace(/\s+/g,'-'))}">${esc(s)}</span>`;
-const actionsOf = x => Array.isArray(x.actions) ? x.actions : Array.isArray(x.followupActions) ? x.followupActions : [];
-const yesNo = x => /^(?:yes|no|none|nil|n\/?a|not applicable|nothing|no issues?|no shortage(?: reported)?|لا|نعم|لا يوجد|ما فيه|مافيه|تم|\-|\.)[\s.!]*$/i.test(String(x || '').trim());
 
-function showPage(id) {
-  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === id));
-  if (id === 'weeklyMonitoringPage') setCurrentWeek();
-  if (['latestReportsPage','viewReportsPage','weeklyMonitoringPage'].includes(id)) loadData();
-  window.scrollTo(0,0);
+const STATUSES = ["Open", "Under Processing", "Closed"];
+
+let reports = [];
+let savedIssues = [];
+let allIssues = [];
+let filteredReports = [];
+
+const el = id => document.getElementById(id);
+const val = id => (el(id)?.value || "").trim();
+
+const esc = value => String(value ?? "").replace(
+  /[&<>"']/g,
+  c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c])
+);
+
+function toDate(value) {
+  if (!value) return null;
+  const date = typeof value.toDate === "function"
+    ? value.toDate()
+    : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
 }
 
-/* Use complete narrative blocks, not keyword-only summaries. A blank or yes/no
-   answer is ignored. Separate numbered/bulleted paragraphs when clearly marked. */
-function splitNarratives(raw) {
-  const text = String(raw || '').replace(/\r/g,'').trim();
-  if (!text || yesNo(text)) return [];
-  const lines = text.split('\n');
-  const blocks = [];
-  let current = '';
-  const flush = () => { if (current.trim() && !yesNo(current)) blocks.push(current.trim()); current = ''; };
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const marker = /^(?:\d+[.)]|[-•*])\s+/.test(trimmed);
-    if (!trimmed) { if (current) current += '\n'; continue; }
-    if (marker && current.trim()) flush();
-    current += (current && !current.endsWith('\n') ? '\n' : '') + (marker ? trimmed.replace(/^(?:\d+[.)]|[-•*])\s+/,'') : line.trimEnd());
+function fmt(value) {
+  const date = toDate(value);
+  return date
+    ? date.toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      })
+    : "—";
+}
+
+function reportDate(report) {
+  return toDate(
+    report.date ||
+    report.createdAt ||
+    report.timestamp
+  );
+}
+
+function issueDate(issue) {
+  return toDate(issue.createdAt || issue.date);
+}
+
+function statusOf(issue) {
+  const status = issue.status || issue.followupStatus;
+  return STATUSES.includes(status) ? status : "Open";
+}
+
+function actionsOf(issue) {
+  if (Array.isArray(issue.actions)) return issue.actions;
+  if (Array.isArray(issue.followupActions)) {
+    return issue.followupActions;
   }
-  flush();
-  return blocks;
+  return [];
 }
 
-function extractLegacy(r) {
-  const a = r.structuredAnswers || {};
+function statusTag(status) {
+  const className = status.toLowerCase().replace(/\s+/g, "-");
+  return `<span class="status-pill ${className}">${esc(status)}</span>`;
+}
+
+// PAGE NAVIGATION
+
+window.showPage = function(pageId) {
+  const target = el(pageId);
+
+  if (!target) {
+    console.error("Page not found:", pageId);
+    return;
+  }
+
+  document.querySelectorAll(".page").forEach(page => {
+    page.classList.remove("active");
+    page.style.display = "none";
+  });
+
+  target.classList.add("active");
+  target.style.display = pageId === "homePage"
+    ? "flex"
+    : "block";
+
+  window.scrollTo(0, 0);
+
+  if (pageId === "weeklyMonitoringPage") {
+    setCurrentWeek();
+  }
+
+  if ([
+    "latestReportsPage",
+    "viewReportsPage",
+    "weeklyMonitoringPage"
+  ].includes(pageId)) {
+    loadData();
+  }
+};
+
+// REPORT GENERATION
+
+window.generateReport = function() {
+  const form = el("reportForm");
+  const preview = el("reportContent");
+
+  if (!form || !preview) return;
+
+  const required = preview.required;
+  preview.required = false;
+
+  const valid = form.reportValidity();
+  preview.required = required;
+
+  if (!valid) return;
+
   const fields = [
-    ['previous','Previous Shift Issues',a.previousShiftIssues ?? a.previousIssues],
-    ['new','New Issues',a.newRisingIssues ?? a.newIssues],
-    ['endorsement','Next Shift Endorsement',a.nextShiftEndorsement ?? a.endorsementToNextShift],
-    ['notes','Additional Notes',a.additionalNotes ?? a.notes]
+    ["Staff Present", "q_present"],
+    ["Attendance Updates", "q_absence"],
+    ["Previous Shift Issues", "q_previous"],
+    ["New Issues", "q_new"],
+    ["Actions Taken During Shift", "q_actions"],
+    ["Endorsement to Next Shift", "q_next"],
+    ["Priority", "q_priority"],
+    ["Additional Notes", "q_notes"],
+    ["Medication Shortage", "q_shortage"]
   ];
-  /* For old reports without structuredAnswers, recover labeled paragraphs from
-     the full report text. Keep multi-line lists, such as medication names. */
-  if (!fields.some(f => String(f[2] || '').trim())) {
-    const raw = String(r.content || '');
-    const labels = [
-      ['previous','Previous Shift Issues',/^(?:Endorsed issues from the previous shift|Previous Shift Issues)\s*:\s*/i],
-      ['new','New Issues',/^(?:New or rising issues during the shift|New Issues)\s*:\s*/i],
-      ['endorsement','Next Shift Endorsement',/^(?:Items to be endorsed to the next shift|Endorsement to Next Shift|Next Shift Endorsement)\s*:\s*/i],
-      ['notes','Additional Notes',/^Additional Notes\s*:\s*/i]
-    ];
-    const boundaries = /^(?:Staff present during the shift|Attendance updates|Endorsed issues from the previous shift|New or rising issues during the shift|Actions taken during the shift|Items to be endorsed to the next shift|Priority level|Additional notes|Medication shortage status|Staff Present|Previous Shift Issues|New Issues|Endorsement to Next Shift|Next Shift Endorsement|Endorsement Priority|Medication Shortage)\s*:/i;
-    const lines = raw.replace(/\r/g,'').split('\n');
-    for (const [key,label,regex] of labels) {
-      const index = lines.findIndex(line => regex.test(line.trim()));
-      if (index < 0) continue;
-      const result = [lines[index].trim().replace(regex,'')];
-      for (let k=index+1;k<lines.length;k++) {
-        if (boundaries.test(lines[k].trim())) break;
-        result.push(lines[k]);
-      }
-      const target = fields.find(f => f[0] === key);
-      target[2] = result.join('\n').trim();
-    }
+
+  const content = fields.map(
+    ([label, id]) => `${label}: ${val(id)}`
+  ).join("\n\n");
+
+  const individualIssues = getNewIssues().map(
+    (item, index) =>
+      `${index + 1}. ${item.issue}` +
+      (item.action ? `\nInitial Action: ${item.action}` : "")
+  ).join("\n\n");
+
+  preview.value =
+    "Pharmacy Shift Report\n\n" +
+    `Report prepared by ${val("employeeName")}, ` +
+    `Badge Number ${val("badgeNumber")}, ` +
+    `for ${val("section")}, ${val("shift")} shift.\n\n` +
+    content +
+    "\n\nIndividual Issues / Endorsements:\n" +
+    (individualIssues || "None");
+};
+
+function addIssueInput() {
+  const container = el("issueInputs");
+  if (!container) return;
+
+  const box = document.createElement("div");
+  box.className = "issue-entry";
+
+  box.innerHTML = `
+    <label>
+      Issue / Endorsement
+      <textarea class="new-issue-description"
+        placeholder="Enter complete issue details"></textarea>
+    </label>
+    <label>
+      Initial Action Taken
+      <textarea class="new-issue-action"></textarea>
+    </label>
+    <button type="button" class="secondary remove-issue">
+      Remove Issue
+    </button>
+  `;
+
+  box.querySelector(".remove-issue").onclick = () => box.remove();
+  container.appendChild(box);
+}
+
+function getNewIssues() {
+  return [...document.querySelectorAll(
+    "#issueInputs .issue-entry"
+  )].map(box => ({
+    issue: box.querySelector(".new-issue-description").value.trim(),
+    action: box.querySelector(".new-issue-action").value.trim()
+  }));
+}
+
+// SAVE REPORT
+
+async function saveReport(event) {
+  event.preventDefault();
+
+  const form = el("reportForm");
+  if (!form.reportValidity()) return;
+
+  const items = getNewIssues();
+
+  if (items.some(item => !item.issue)) {
+    alert("Complete all individual issues.");
+    return;
   }
-  const result = [];
-  for (const [key,label,raw] of fields) {
-    splitNarratives(raw).forEach((text,index) => {
-      const id = `legacy_${r.id}_${key}_${index}`;
-      result.push({
-        id, reportId:r.id, section:r.section || 'Other',
-        date:r.date || r.createdAt || null, createdAt:r.date || r.createdAt || null,
-        issue:text, description:text, category:label,
-        status:null, actions:[], statusHistory:[], closedAt:null, closedBy:null,
-        lastUpdatedBy:'', legacy:true
+
+  if (!val("reportContent")) {
+    alert("Generate Report Preview first.");
+    return;
+  }
+
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+
+  const date = new Date().toISOString();
+  const ref = reportsRef.doc();
+
+  const answers = {
+    present: val("q_present"),
+    attendanceUpdates: val("q_absence"),
+    previousShiftIssues: val("q_previous"),
+    newRisingIssues: val("q_new"),
+    actionsTaken: val("q_actions"),
+    nextShiftEndorsement: val("q_next"),
+    priority: val("q_priority"),
+    additionalNotes: val("q_notes"),
+    medicationShortage: val("q_shortage")
+  };
+
+  const report = {
+    date,
+    createdAt: date,
+    dateDisplay: fmt(date),
+    employeeName: val("employeeName"),
+    badgeNumber: val("badgeNumber"),
+    section: val("section"),
+    shift: val("shift"),
+    priority: val("q_priority"),
+    content: val("reportContent"),
+    structuredAnswers: answers,
+    followupStatus: "Open",
+    followupActions: [],
+    issueCount: items.length
+  };
+
+  try {
+    const batch = db.batch();
+    batch.set(ref, report);
+
+    for (const item of items) {
+      const issueRef = issuesRef.doc();
+
+      batch.set(issueRef, {
+        reportId: ref.id,
+        date,
+        createdAt: date,
+        section: report.section,
+        shift: report.shift,
+        priority: report.priority,
+        issue: item.issue,
+        description: item.issue,
+        status: "Open",
+        statusHistory: [{
+          date,
+          status: "Open",
+          previousStatus: null,
+          updatedBy: report.employeeName,
+          action: item.action || "Issue reported"
+        }],
+        actions: item.action ? [{
+          name: report.employeeName,
+          action: item.action,
+          date
+        }] : [],
+        lastUpdatedBy: item.action ? report.employeeName : "",
+        closedAt: null,
+        closedBy: null
       });
+    }
+
+    await batch.commit();
+
+    form.reset();
+    el("issueInputs").innerHTML = "";
+
+    alert("Report saved successfully.");
+    showPage("latestReportsPage");
+
+  } catch (error) {
+    console.error(error);
+    alert("Unable to save report. Check Firebase permissions.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// LEGACY REPORT ISSUES
+
+function isRoutine(text) {
+  return /^(yes|no|none|nil|n\/a|nothing|no issues?|no shortage reported|لا|نعم|لا يوجد|-|\.)$/i
+    .test(String(text || "").trim());
+}
+
+function splitNarratives(raw) {
+  const text = String(raw || "").trim();
+
+  if (!text || isRoutine(text)) return [];
+
+  return text
+    .split(/\n(?=\s*(?:\d+[.)]|[-•*])\s+)/)
+    .map(x => x.trim().replace(/^(?:\d+[.)]|[-•*])\s+/, ""))
+    .filter(x => x && !isRoutine(x));
+}
+
+function extractLegacy(report) {
+  const answers = report.structuredAnswers || {};
+
+  const fields = [
+    [
+      "Previous Shift Issues",
+      answers.previousShiftIssues || answers.previousIssues
+    ],
+    [
+      "New Issues",
+      answers.newRisingIssues || answers.newIssues
+    ],
+    [
+      "Next Shift Endorsement",
+      answers.nextShiftEndorsement || answers.endorsementToNextShift
+    ],
+    [
+      "Additional Notes",
+      answers.additionalNotes || answers.notes
+    ]
+  ];
+
+  if (!fields.some(item => String(item[1] || "").trim())) {
+    const content = String(report.content || "");
+    const labels = [
+      ["Previous Shift Issues",
+        /(?:Previous Shift Issues|Endorsed issues from the previous shift):\s*/i],
+      ["New Issues",
+        /(?:New Issues|New or rising issues during the shift):\s*/i],
+      ["Next Shift Endorsement",
+        /(?:Endorsement to Next Shift|Next Shift Endorsement|Items to be endorsed to the next shift):\s*/i],
+      ["Additional Notes", /Additional Notes:\s*/i]
+    ];
+
+    const lines = content.split(/\r?\n/);
+    const boundary = /^(?:Staff Present|Attendance Updates|Previous Shift Issues|New Issues|Actions Taken|Endorsement to Next Shift|Next Shift Endorsement|Priority|Additional Notes|Medication Shortage|Individual Issues)/i;
+
+    labels.forEach(([name, regex], index) => {
+      const start = lines.findIndex(line => regex.test(line.trim()));
+      if (start < 0) return;
+
+      const collected = [
+        lines[start].trim().replace(regex, "")
+      ];
+
+      for (let j = start + 1; j < lines.length; j++) {
+        if (boundary.test(lines[j].trim())) break;
+        collected.push(lines[j]);
+      }
+
+      fields[index][1] = collected.join("\n").trim();
     });
   }
+
+  const result = [];
+
+  fields.forEach(([category, raw], fieldIndex) => {
+    splitNarratives(raw).forEach((description, index) => {
+      result.push({
+        id: `legacy_${report.id}_${fieldIndex}_${index}`,
+        reportId: report.id,
+        date: report.date || report.createdAt,
+        createdAt: report.date || report.createdAt,
+        section: report.section || "Other",
+        category,
+        issue: description,
+        description,
+        status: null,
+        actions: [],
+        statusHistory: [],
+        closedAt: null,
+        closedBy: null,
+        legacy: true
+      });
+    });
+  });
+
   return result;
 }
 
 function buildIssues() {
-  const savedById = new Map(savedIssues.map(i => [i.id,i]));
+  const savedIds = new Set(savedIssues.map(issue => issue.id));
   const combined = [...savedIssues];
-  for (const r of reports) {
-    const existing = savedIssues.filter(i => i.reportId === r.id);
-    const normalized = new Set(existing.map(i => String(i.issue || i.description || '').trim().toLowerCase()));
-    for (const candidate of extractLegacy(r)) {
-      if (savedById.has(candidate.id)) continue;
-      /* Do not repeat a narrative already entered as an individual issue. */
-      const key = candidate.issue.trim().toLowerCase();
-      if (normalized.has(key)) continue;
-      combined.push(candidate);
-      normalized.add(key);
-    }
-  }
+
+  reports.forEach(report => {
+    const existingTexts = new Set(
+      savedIssues
+        .filter(issue => issue.reportId === report.id)
+        .map(issue =>
+          String(issue.issue || issue.description || "")
+            .trim()
+            .toLowerCase()
+        )
+    );
+
+    extractLegacy(report).forEach(issue => {
+      const text = issue.issue.trim().toLowerCase();
+
+      if (savedIds.has(issue.id) || existingTexts.has(text)) {
+        return;
+      }
+
+      combined.push(issue);
+      existingTexts.add(text);
+    });
+  });
+
   allIssues = combined;
 }
 
-function addIssueInput() {
-  const wrapper = document.createElement('div');
-  wrapper.className = 'issue-entry';
-  wrapper.innerHTML = `<label>Issue / Endorsement (full details) *<textarea class="new-issue-description" required placeholder="Write the complete issue, including medication lists"></textarea></label><label>Initial Action Taken<textarea class="new-issue-action"></textarea></label><button type="button" class="secondary remove-issue">Remove Issue</button>`;
-  wrapper.querySelector('.remove-issue').addEventListener('click', () => wrapper.remove());
-  el('issueInputs')?.append(wrapper);
-}
-function getNewIssues() {
-  return [...document.querySelectorAll('#issueInputs .issue-entry')].map(box => ({
-    issue:box.querySelector('.new-issue-description').value.trim(),
-    action:box.querySelector('.new-issue-action').value.trim()
-  }));
-}
-function generateReport() {
-  const form = el('reportForm');
-  const preview=el('reportContent');
-  const wasRequired=preview?.required;
-  if(preview) preview.required=false;
-  const valid=form.reportValidity();
-  if(preview) preview.required=wasRequired;
-  if(!valid) return;
-  const fields = [
-    ['Staff Present','q_present'], ['Attendance Updates','q_absence'],
-    ['Previous Shift Issues','q_previous'], ['New Issues','q_new'],
-    ['Actions Taken During Shift','q_actions'],
-    ['Endorsement to Next Shift','q_next'], ['Priority','q_priority'],
-    ['Additional Notes','q_notes'], ['Medication Shortage','q_shortage']
-  ];
-  el('reportContent').value = `Pharmacy Shift Report\n\nReport prepared by ${val('employeeName')}, Badge Number ${val('badgeNumber')}, for ${val('section')}, ${val('shift')} shift.\n\n` + fields.map(([label,id]) => `${label}: ${val(id)}`).join('\n\n') + '\n\nIndividual Issues / Endorsements:\n' + (getNewIssues().map((x,i) => `${i+1}. ${x.issue}${x.action ? '\nInitial Action: '+x.action : ''}`).join('\n\n') || 'None');
-}
-async function saveReport(event) {
-  event.preventDefault();
-  const form = el('reportForm');
-  if (!form.reportValidity()) return;
-  const items = getNewIssues();
-  if (items.some(i => !i.issue)) { alert('Complete every individual issue.'); return; }
-  if (!val('reportContent')) { alert('Generate Report Preview first.'); return; }
-  const button = form.querySelector('[type="submit"]');
-  button.disabled = true;
-  const date = new Date().toISOString();
-  const ref = reportsRef.doc();
-  const answers = {
-    present:val('q_present'), attendanceUpdates:val('q_absence'),
-    previousShiftIssues:val('q_previous'), newRisingIssues:val('q_new'),
-    actionsTaken:val('q_actions'), nextShiftEndorsement:val('q_next'),
-    priority:val('q_priority'), additionalNotes:val('q_notes'),
-    medicationShortage:val('q_shortage')
-  };
-  const report = {
-    date, dateDisplay:fmt(date), createdAt:date,
-    employeeName:val('employeeName'), badgeNumber:val('badgeNumber'),
-    section:val('section'), shift:val('shift'), priority:val('q_priority'),
-    content:val('reportContent'), structuredAnswers:answers,
-    followupStatus:'Open', followupActions:[], issueCount:items.length
-  };
-  try {
-    const batch = db.batch();
-    batch.set(ref,report);
-    /* Explicit issues are stored separately. If no explicit issue was added,
-       the meaningful narrative answers are still shown as virtual legacy issues. */
-    for (const item of items) {
-      const doc = issuesRef.doc();
-      batch.set(doc,{
-        reportId:ref.id, date, createdAt:date, section:report.section,
-        shift:report.shift, priority:report.priority,
-        issue:item.issue, description:item.issue, status:'Open',
-        statusHistory:[{date,status:'Open',previousStatus:null,updatedBy:report.employeeName,action:item.action||'Issue reported'}],
-        actions:item.action ? [{name:report.employeeName,action:item.action,date}] : [],
-        lastUpdatedBy:item.action ? report.employeeName : '',
-        lastUpdatedAt:item.action ? date : null,
-        closedAt:null,closedBy:null,legacy:false
-      });
-    }
-    await batch.commit();
-    form.reset();
-    if (el('issueInputs')) el('issueInputs').innerHTML = '';
-    alert('Report saved successfully.');
-    showPage('latestReportsPage');
-  } catch (e) {
-    console.error(e);
-    alert('Unable to save. Check Firebase permissions.');
-  } finally { button.disabled = false; }
-}
+// LOAD FIREBASE DATA
 
 async function loadData() {
   try {
-    const [rs,is] = await Promise.all([reportsRef.get(),issuesRef.get()]);
-    reports = rs.docs.map(d => ({...d.data(),id:d.id})).sort((a,b) => (reportDate(b)?.getTime() || 0)-(reportDate(a)?.getTime() || 0));
-    savedIssues = is.docs.map(d => ({...d.data(),id:d.id}));
+    const [reportSnapshot, issueSnapshot] = await Promise.all([
+      reportsRef.get(),
+      issuesRef.get()
+    ]);
+
+    reports = reportSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id
+    }));
+
+    reports.sort((a, b) =>
+      (reportDate(b)?.getTime() || 0) -
+      (reportDate(a)?.getTime() || 0)
+    );
+
+    savedIssues = issueSnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id
+    }));
+
     buildIssues();
+
     filteredReports = [...reports];
-    renderLatest(); renderAll(); renderMonitoring();
-  } catch (e) {
-    console.error(e);
-    for (const id of ['latestReportsList','allReportsList']) if (el(id)) el(id).textContent = 'Unable to load reports. Check Firebase permissions.';
-    if (el('monitoringTableBody')) el('monitoringTableBody').innerHTML = '<tr><td colspan="7">Unable to load issues. Check Firebase permissions.</td></tr>';
+
+    renderLatest();
+    renderAll();
+    renderMonitoring();
+
+  } catch (error) {
+    console.error(error);
+
+    ["latestReportsList", "allReportsList"].forEach(id => {
+      if (el(id)) {
+        el(id).textContent = "Unable to load reports.";
+      }
+    });
+
+    if (el("monitoringTableBody")) {
+      el("monitoringTableBody").innerHTML =
+        '<tr><td colspan="7">Unable to load issues.</td></tr>';
+    }
   }
 }
 
-function historyHTML(i) {
-  const a = actionsOf(i);
-  const h=historyOf(i);
-  if (h.length) return h.map(x=>`<div class="action-entry"><strong>${esc(x.updatedBy||'')}</strong> ${x.status?statusTag(x.status):''}<div>${esc(x.action||'')}</div><small>${esc(fmt(x.date))}</small></div>`).join('');
-  return a.length ? a.map(x => `<div class="action-entry"><strong>${esc(x.name || '')}</strong><div>${esc(x.action || '')}</div><small>${esc(fmt(x.date))}</small></div>`).join('') : '<p class="muted">No action recorded.</p>';
+// REPORT DISPLAY
+
+function historyOf(issue) {
+  return Array.isArray(issue.statusHistory)
+    ? [...issue.statusHistory].sort(
+        (a, b) =>
+          (toDate(a.date)?.getTime() || 0) -
+          (toDate(b.date)?.getTime() || 0)
+      )
+    : [];
 }
+
+function historyHTML(issue) {
+  const history = historyOf(issue);
+
+  if (history.length) {
+    return history.map(entry => `
+      <div class="action-entry">
+        <strong>${esc(entry.updatedBy || "")}</strong>
+        ${entry.status ? statusTag(entry.status) : ""}
+        <div>${esc(entry.action || "")}</div>
+        <small>${esc(fmt(entry.date))}</small>
+      </div>
+    `).join("");
+  }
+
+  const actions = actionsOf(issue);
+
+  return actions.length
+    ? actions.map(action => `
+        <div class="action-entry">
+          <strong>${esc(action.name || "")}</strong>
+          <div>${esc(action.action || "")}</div>
+          <small>${esc(fmt(action.date))}</small>
+        </div>
+      `).join("")
+    : "<p>No action recorded.</p>";
+}
+
 function editorHTML(issue) {
-  return `<div class="followup-editor" data-issue-id="${esc(issue.id)}"><label>Authorized Badge<input class="f-badge" type="password" autocomplete="off" inputmode="numeric"></label><label>Action Taken<textarea class="f-action" placeholder="Enter follow-up action"></textarea></label><label>Status<select class="f-status">${STATUSES.map(s => `<option value="${s}" ${statusOf(issue)===s?'selected':''}>${s}</option>`).join('')}</select></label><button type="button" class="followup-save">Save Follow-up</button><p class="followup-message" role="status"></p></div>`;
-}
-function issueHTML(i) {
-  return `<div class="issue-card"><div class="followup-heading"><strong>${esc(i.category ? i.category+': ' : '')}${esc(i.issue || i.description || '')}</strong>${statusTag(statusOf(i))}</div>${historyHTML(i)}${i.closedBy ? `<div class="closed-by">Closed by: ${esc(i.closedBy)}</div>` : ''}${editorHTML(i)}</div>`;
-}
-function reportHTML(r) {
-  const own = allIssues.filter(i => i.reportId === r.id);
-  const priority = ['Critical','Moderate','Normal'].includes(r.priority) ? r.priority : 'Normal';
-  return `<article class="report-item ${priority.toLowerCase()}"><div class="report-header"><strong>${esc(r.employeeName || 'Unknown')} — ${esc(r.section || '')}</strong><span class="priority-badge ${priority.toLowerCase()}">${esc(priority)}</span></div><p class="report-date">${esc(r.dateDisplay || fmt(reportDate(r)))}</p><div class="report-content">${esc(r.content || '')}</div>${own.length ? `<div class="followup-panel"><h3>Issue Follow-up</h3>${own.map(issueHTML).join('')}</div>` : ''}</article>`;
-}
-function renderLatest() {
-  const target = el('latestReportsList'); if (!target) return;
-  const groups = [...new Set(reports.map(r => r.section || 'Other'))];
-  target.innerHTML = groups.length ? groups.map(s => `<div class="section-block"><h3>${esc(s)}</h3>${reports.filter(r => (r.section || 'Other')===s).slice(0,3).map(reportHTML).join('')}</div>`).join('') : '<p class="empty-msg">No reports available.</p>';
-}
-function renderAll() {
-  if (el('allReportsList')) el('allReportsList').innerHTML = filteredReports.length ? filteredReports.map(reportHTML).join('') : '<p class="empty-msg">No reports found.</p>';
-  if (el('reportCount')) el('reportCount').textContent = `(${filteredReports.length} reports)`;
-}
-function filterReports() {
-  filteredReports = reports.filter(r => {
-    const d = reportDate(r);
-    const day = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
-    return (!val('filterStartDate') || day >= val('filterStartDate')) && (!val('filterEndDate') || day <= val('filterEndDate')) && (!val('filterSection') || r.section === val('filterSection')) && (!val('filterShift') || r.shift === val('filterShift')) && (!val('filterPriority') || r.priority === val('filterPriority'));
-  }); renderAll();
-}
-function resetFilters() {
-  ['filterStartDate','filterEndDate','filterSection','filterShift','filterPriority'].forEach(id => { if (el(id)) el(id).value=''; });
-  filteredReports=[...reports]; renderAll();
+  return `
+    <div class="followup-editor" data-issue-id="${esc(issue.id)}">
+      <label>Authorized Badge
+        <input class="f-badge" type="password" inputmode="numeric">
+      </label>
+
+      <label>Action Taken
+        <textarea class="f-action"></textarea>
+      </label>
+
+      <label>Status
+        <select class="f-status">
+          ${STATUSES.map(status => `
+            <option value="${status}"
+              ${statusOf(issue) === status ? "selected" : ""}>
+              ${status}
+            </option>
+          `).join("")}
+        </select>
+      </label>
+
+      <button type="button" class="followup-save">
+        Save Follow-up
+      </button>
+
+      <p class="followup-message"></p>
+    </div>
+  `;
 }
 
-/* Tuesday 00:00 to next Tuesday 00:00, local time.
-   The existing HTML input is converted from type=week to type=date
-   automatically so no HTML edits are required. */
+function issueHTML(issue) {
+  return `
+    <div class="issue-card">
+      <strong>${esc(issue.category || "Issue")}:
+        ${esc(issue.issue || issue.description || "")}
+      </strong>
+
+      ${statusTag(statusOf(issue))}
+      ${historyHTML(issue)}
+
+      ${issue.closedBy
+        ? `<p>Closed by: ${esc(issue.closedBy)}</p>`
+        : ""}
+
+      ${editorHTML(issue)}
+    </div>
+  `;
+}
+
+function reportHTML(report) {
+  const related = allIssues.filter(
+    issue => issue.reportId === report.id
+  );
+
+  const priority = ["Normal", "Moderate", "Critical"]
+    .includes(report.priority)
+    ? report.priority
+    : "Normal";
+
+  return `
+    <article class="report-item ${priority.toLowerCase()}">
+      <div class="report-header">
+        <strong>
+          ${esc(report.employeeName || "Unknown")}
+          — ${esc(report.section || "")}
+        </strong>
+        <span class="priority-badge ${priority.toLowerCase()}">
+          ${priority}
+        </span>
+      </div>
+
+      <p class="report-date">
+        ${esc(report.dateDisplay || fmt(reportDate(report)))}
+      </p>
+
+      <div class="report-content">
+        ${esc(report.content || "")}
+      </div>
+
+      ${related.length ? `
+        <div class="followup-panel">
+          <h3>Issue Follow-up</h3>
+          ${related.map(issueHTML).join("")}
+        </div>
+      ` : ""}
+    </article>
+  `;
+}
+
+function renderLatest() {
+  const target = el("latestReportsList");
+  if (!target) return;
+
+  const sections = [...new Set(
+    reports.map(report => report.section || "Other")
+  )];
+
+  target.innerHTML = sections.length
+    ? sections.map(section => `
+        <div class="section-block">
+          <h3>${esc(section)}</h3>
+          ${reports
+            .filter(report => (report.section || "Other") === section)
+            .slice(0, 3)
+            .map(reportHTML)
+            .join("")}
+        </div>
+      `).join("")
+    : '<p class="empty-msg">No reports available.</p>';
+}
+
+function renderAll() {
+  const target = el("allReportsList");
+
+  if (target) {
+    target.innerHTML = filteredReports.length
+      ? filteredReports.map(reportHTML).join("")
+      : '<p class="empty-msg">No reports found.</p>';
+  }
+
+  if (el("reportCount")) {
+    el("reportCount").textContent =
+      `(${filteredReports.length} reports)`;
+  }
+}
+
+window.filterReports = function() {
+  filteredReports = reports.filter(report => {
+    const date = reportDate(report);
+
+    const day = date
+      ? `${date.getFullYear()}-${String(date.getMonth() + 1)
+          .padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+      : "";
+
+    return (
+      (!val("filterStartDate") || day >= val("filterStartDate")) &&
+      (!val("filterEndDate") || day <= val("filterEndDate")) &&
+      (!val("filterSection") ||
+        report.section === val("filterSection")) &&
+      (!val("filterShift") ||
+        report.shift === val("filterShift")) &&
+      (!val("filterPriority") ||
+        report.priority === val("filterPriority"))
+    );
+  });
+
+  renderAll();
+};
+
+window.resetFilters = function() {
+  [
+    "filterStartDate",
+    "filterEndDate",
+    "filterSection",
+    "filterShift",
+    "filterPriority"
+  ].forEach(id => {
+    if (el(id)) el(id).value = "";
+  });
+
+  filteredReports = [...reports];
+  renderAll();
+};
+
+// TUESDAY-TO-TUESDAY MONITORING
+
 function tuesdayRange(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null;
-  const [year,month,day] = value.split('-').map(Number);
-  const chosen = new Date(year,month-1,day);
-  if (chosen.getFullYear()!==year || chosen.getMonth()!==month-1 || chosen.getDate()!==day) return null;
-  const daysSinceTuesday = (chosen.getDay()-2+7)%7;
-  const start = new Date(year,month-1,day-daysSinceTuesday,0,0,0,0);
-  const end = new Date(start.getFullYear(),start.getMonth(),start.getDate()+7,0,0,0,0);
-  return {start,end};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return null;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const chosen = new Date(year, month - 1, day);
+
+  if (
+    chosen.getFullYear() !== year ||
+    chosen.getMonth() !== month - 1 ||
+    chosen.getDate() !== day
+  ) {
+    return null;
+  }
+
+  const offset = (chosen.getDay() - 2 + 7) % 7;
+
+  const start = new Date(
+    year,
+    month - 1,
+    day - offset,
+    0, 0, 0, 0
+  );
+
+  const end = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate() + 7,
+    0, 0, 0, 0
+  );
+
+  return { start, end };
 }
+
 function setCurrentWeek() {
-  const picker=el('monitoringWeek');
+  const picker = el("monitoringWeek");
   if (!picker) return;
-  const previousValue=picker.value;
-  if (picker.type !== 'date') picker.type='date';
+
+  if (picker.type !== "date") picker.type = "date";
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(picker.value)) return;
-  const today=new Date();
-  const daysSinceTuesday=(today.getDay()-2+7)%7;
-  const tuesday=new Date(today.getFullYear(),today.getMonth(),today.getDate()-daysSinceTuesday);
-  const yyyy=tuesday.getFullYear();
-  const mm=String(tuesday.getMonth()+1).padStart(2,'0');
-  const dd=String(tuesday.getDate()).padStart(2,'0');
-  picker.value=`${yyyy}-${mm}-${dd}`;
+
+  const today = new Date();
+  const offset = (today.getDay() - 2 + 7) % 7;
+
+  const tuesday = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() - offset
+  );
+
+  picker.value =
+    `${tuesday.getFullYear()}-` +
+    `${String(tuesday.getMonth() + 1).padStart(2, "0")}-` +
+    `${String(tuesday.getDate()).padStart(2, "0")}`;
 }
-/* Dashboard launch: initialize ONLY the most recent 14 days of legacy
-   untracked issues as Open. Once followed up, carry unresolved issues forever. */
-const DASHBOARD_LAUNCH_WINDOW_DAYS = 14;
-function hasRecordedStatus(i) {
-  return STATUSES.includes(i.status) ||
-    (Array.isArray(i.statusHistory) && i.statusHistory.some(h => STATUSES.includes(h.status) && !h.imported));
+
+function hasRecordedStatus(issue) {
+  return STATUSES.includes(issue.status) ||
+    historyOf(issue).some(entry =>
+      STATUSES.includes(entry.status) && !entry.imported
+    );
 }
-function historyOf(i) {
-  return Array.isArray(i.statusHistory) ? [...i.statusHistory].sort((a,b)=>(toDate(a.date)?.getTime()||0)-(toDate(b.date)?.getTime()||0)) : [];
+
+function bootstrapLegacy(issue) {
+  if (hasRecordedStatus(issue)) return false;
+
+  const created = issueDate(issue);
+  if (!created) return false;
+
+  const launch = new Date("2026-10-12T00:00:00+03:00");
+  const cutoff = new Date(
+    launch.getTime() - 14 * 24 * 60 * 60 * 1000
+  );
+
+  return created >= cutoff;
 }
-function statusAt(i, date) {
-  const entries=historyOf(i).filter(h=>STATUSES.includes(h.status) && !h.imported && toDate(h.date));
+
+function statusAt(issue, date) {
+  const entries = historyOf(issue).filter(
+    entry =>
+      STATUSES.includes(entry.status) &&
+      !entry.imported &&
+      toDate(entry.date)
+  );
+
   if (!entries.length) {
-    const closed=toDate(i.closedAt);
-    if (closed && closed<date) return 'Closed';
-    return statusOf(i);
+    const closed = toDate(issue.closedAt);
+    if (closed && closed < date) return "Closed";
+    return statusOf(issue);
   }
-  let status='Open';
-  for (const h of entries) {
-    if (toDate(h.date)>=date) break;
-    status=h.status;
+
+  let status = "Open";
+
+  for (const entry of entries) {
+    if (toDate(entry.date) >= date) break;
+    status = entry.status;
   }
+
   return status;
 }
-function bootstrapLegacy(i) {
-  if (hasRecordedStatus(i)) return false;
-  const created=issueDate(i);
-  if (!created) return false;
-  // Fixed dashboard launch window. Never expire issues after 14 days.
-  const launch=new Date('2026-10-12T00:00:00+03:00');
-  const cutoff=new Date(launch.getTime()-14*86400000);
-  return created>=cutoff;
+
+function isIncluded(issue, range) {
+  const created = issueDate(issue);
+
+  if (!created || created >= range.end) return false;
+
+  if (!hasRecordedStatus(issue) && !bootstrapLegacy(issue)) {
+    return false;
+  }
+
+  if (created >= range.start) return true;
+
+  if (statusAt(issue, range.start) !== "Closed") return true;
+
+  return historyOf(issue).some(entry => {
+    const date = toDate(entry.date);
+    return date &&
+      date >= range.start &&
+      date < range.end &&
+      entry.status !== "Closed";
+  });
 }
 
-function isIncluded(i,range) {
-  const created=issueDate(i);
-  if (!created || created>=range.end) return false;
-  if (!hasRecordedStatus(i) && !bootstrapLegacy(i)) return false;
-  if (created>=range.start) return true;
-  if (statusAt(i,range.start)!=='Closed') return true;
-  return historyOf(i).some(h=>toDate(h.date)>=range.start && toDate(h.date)<range.end && h.status!=='Closed');
+function lastActionAt(issue, cutoff) {
+  return actionsOf(issue)
+    .filter(action =>
+      toDate(action.date) &&
+      toDate(action.date) < cutoff
+    )
+    .sort((a, b) => toDate(a.date) - toDate(b.date))
+    .at(-1);
 }
-function lastActionAt(i,cutoff) {
-  return actionsOf(i).filter(a=>toDate(a.date) && toDate(a.date)<cutoff)
-    .sort((a,b)=>toDate(a.date)-toDate(b.date)).at(-1);
+
+function closedByAt(issue, cutoff) {
+  if (statusAt(issue, cutoff) !== "Closed") return "—";
+
+  const entry = historyOf(issue)
+    .filter(item =>
+      item.status === "Closed" &&
+      toDate(item.date) &&
+      toDate(item.date) < cutoff
+    )
+    .at(-1);
+
+  return entry?.updatedBy || issue.closedBy || "—";
 }
-function closedByAt(i,cutoff) {
-  if (statusAt(i,cutoff)!=='Closed') return '—';
-  const h=historyOf(i).filter(x=>x.status==='Closed' && toDate(x.date) && toDate(x.date)<cutoff).at(-1);
-  return h?.updatedBy || (toDate(i.closedAt)<cutoff ? i.closedBy : '') || '—';
-}
+
 function renderMonitoring() {
-  const tbody=el('monitoringTableBody'); if (!tbody) return;
+  const tbody = el("monitoringTableBody");
+  if (!tbody) return;
+
   setCurrentWeek();
-  const range=tuesdayRange(val('monitoringWeek'));
-  if (!range) { tbody.innerHTML='<tr><td colspan="7">Choose a valid week.</td></tr>'; return; }
-  let caption=el('tuesdayRangeLabel');
+
+  const range = tuesdayRange(val("monitoringWeek"));
+  if (!range) return;
+
+  let caption = el("tuesdayRangeLabel");
+
   if (!caption) {
-    caption=document.createElement('p'); caption.id='tuesdayRangeLabel'; caption.className='hint';
-    el('monitoringWeek')?.closest('label')?.insertAdjacentElement('afterend',caption);
+    caption = document.createElement("p");
+    caption.id = "tuesdayRangeLabel";
+    caption.className = "hint";
+
+    el("monitoringWeek")
+      ?.closest("label")
+      ?.insertAdjacentElement("afterend", caption);
   }
-  if (caption) caption.textContent=`Tuesday ${range.start.toLocaleDateString('en-GB')} → Tuesday ${range.end.toLocaleDateString('en-GB')} (end exclusive)`;
-  const asOf=new Date(Math.min(range.end.getTime(),Date.now()));
-  const base=allIssues.filter(i=>isIncluded(i,range) && (!val('monitoringSection') || i.section===val('monitoringSection')));
-  const shown=base.filter(i=>!val('monitoringStatus') || statusAt(i,asOf)===val('monitoringStatus'));
-  if (el('monitoringTotal')) el('monitoringTotal').textContent=base.length;
-  if (el('monitoringPending')) el('monitoringPending').textContent=base.filter(i=>statusAt(i,asOf)!=='Closed').length;
-  if (el('monitoringClosed')) el('monitoringClosed').textContent=base.filter(i=>statusAt(i,asOf)==='Closed').length;
-  shown.sort((a,b)=>(issueDate(b)?.getTime()||0)-(issueDate(a)?.getTime()||0));
-  tbody.innerHTML=shown.length ? shown.map(i=>{
-    const carry=issueDate(i)<range.start;
-    const latest=lastActionAt(i,asOf);
-    return `<tr><td>${esc(fmt(issueDate(i)))}</td><td>${esc(i.section || '')}</td><td><button type="button" class="open-issue-details" data-issue-id="${esc(i.id)}" style="background:none;border:0;padding:0;text-align:left;color:#174c72;cursor:pointer;font-weight:700;white-space:pre-wrap">${esc(i.category ? i.category+': ' : '')}${esc(i.issue || i.description || '')}</button>${carry ? '<div class="carry-badge">Carried Forward</div>' : ''}${bootstrapLegacy(i) ? '<div class="carry-badge">Initial Open</div>' : ''}</td><td>${latest ? esc(latest.action || '') : 'No action recorded'}</td><td>${esc(latest?.name || '—')}</td><td>${statusTag(statusAt(i,asOf))}</td><td>${esc(closedByAt(i,asOf))}</td></tr>`;
-  }).join('') : '<tr><td colspan="7">No issues found for the selected Tuesday-to-Tuesday period.</td></tr>';
+
+  if (caption) {
+    caption.textContent =
+      `Tuesday ${range.start.toLocaleDateString("en-GB")}` +
+      ` → Tuesday ${range.end.toLocaleDateString("en-GB")}`;
+  }
+
+  const asOf = new Date(
+    Math.min(range.end.getTime(), Date.now())
+  );
+
+  const base = allIssues.filter(issue =>
+    isIncluded(issue, range) &&
+    (!val("monitoringSection") ||
+      issue.section === val("monitoringSection"))
+  );
+
+  const shown = base.filter(issue =>
+    !val("monitoringStatus") ||
+    statusAt(issue, asOf) === val("monitoringStatus")
+  );
+
+  if (el("monitoringTotal")) {
+    el("monitoringTotal").textContent = base.length;
+  }
+
+  if (el("monitoringPending")) {
+    el("monitoringPending").textContent = base.filter(
+      issue => statusAt(issue, asOf) !== "Closed"
+    ).length;
+  }
+
+  if (el("monitoringClosed")) {
+    el("monitoringClosed").textContent = base.filter(
+      issue => statusAt(issue, asOf) === "Closed"
+    ).length;
+  }
+
+  shown.sort((a, b) =>
+    (issueDate(b)?.getTime() || 0) -
+    (issueDate(a)?.getTime() || 0)
+  );
+
+  tbody.innerHTML = shown.length
+    ? shown.map(issue => {
+        const latest = lastActionAt(issue, asOf);
+        const carried = issueDate(issue) < range.start;
+
+        return `
+          <tr>
+            <td>${esc(fmt(issueDate(issue)))}</td>
+            <td>${esc(issue.section || "")}</td>
+            <td>
+              <button type="button"
+                class="open-issue-details"
+                data-issue-id="${esc(issue.id)}"
+                style="background:none;border:0;
+                text-align:left;color:#174c72;
+                cursor:pointer;white-space:pre-wrap">
+                ${esc(issue.category || "Issue")}:
+                ${esc(issue.issue || issue.description || "")}
+              </button>
+              ${carried
+                ? '<div class="carry-badge">Carried Forward</div>'
+                : ""}
+            </td>
+            <td>${esc(latest?.action || "No action recorded")}</td>
+            <td>${esc(latest?.name || "—")}</td>
+            <td>${statusTag(statusAt(issue, asOf))}</td>
+            <td>${esc(closedByAt(issue, asOf))}</td>
+          </tr>
+        `;
+      }).join("")
+    : '<tr><td colspan="7">No issues found for this week.</td></tr>';
 }
+
+// ISSUE DETAILS
+
 function openIssueDetails(id) {
-  const i=allIssues.find(x=>x.id===id); if (!i) return;
-  let panel=el('issueDetailsPanel');
+  const issue = allIssues.find(item => item.id === id);
+  if (!issue) return;
+
+  let panel = el("issueDetailsPanel");
+
   if (!panel) {
-    panel=document.createElement('div'); panel.id='issueDetailsPanel'; panel.className='card';
-    el('weeklyMonitoringPage')?.appendChild(panel);
+    panel = document.createElement("div");
+    panel.id = "issueDetailsPanel";
+    panel.className = "card";
+    el("weeklyMonitoringPage").appendChild(panel);
   }
-  panel.innerHTML=`<button type="button" class="close-issue-details secondary">← Back to Monitoring</button><h2>Issue Details & Status History</h2><p>${esc(i.section||'')} · ${esc(fmt(issueDate(i)))}</p><div class="report-content">${esc(i.issue||i.description||'')}</div><h3>Follow-up History</h3>${historyOf(i).length ? historyOf(i).map(h=>`<div class="action-entry"><strong>${esc(fmt(h.date))}</strong> ${h.status?statusTag(h.status):''}<div>${esc(h.action||'')}</div><small>Updated by: ${esc(h.updatedBy||'Unknown')}</small></div>`).join('') : historyHTML(i)}${editorHTML(i)}`;
-  panel.style.display='block';
-  panel.scrollIntoView({behavior:'smooth',block:'start'});
+
+  panel.innerHTML = `
+    <button type="button" class="secondary close-issue-details">
+      ← Back to Monitoring
+    </button>
+
+    <h2>Issue Details & Status History</h2>
+
+    <p>${esc(issue.section || "")}
+      — ${esc(fmt(issueDate(issue)))}</p>
+
+    <div class="report-content">
+      ${esc(issue.issue || issue.description || "")}
+    </div>
+
+    <h3>Follow-up History</h3>
+
+    ${historyHTML(issue)}
+    ${editorHTML(issue)}
+  `;
+
+  panel.style.display = "block";
+  panel.scrollIntoView({
+    behavior: "smooth",
+    block: "start"
+  });
 }
+
+// SAVE FOLLOW-UP
 
 async function saveFollowup(button) {
-  const editor=button.closest('.followup-editor'); if (!editor) return;
-  const id=editor.dataset.issueId;
-  const issue=allIssues.find(i => i.id===id); if (!issue) return;
-  const badge=editor.querySelector('.f-badge').value.trim();
-  const name=authorizedBadges[badge];
-  const action=editor.querySelector('.f-action').value.trim();
-  const status=editor.querySelector('.f-status').value;
-  const message=editor.querySelector('.followup-message');
-  if (!name) { message.textContent='Unauthorized badge number.'; return; }
-  if (!STATUSES.includes(status)) { message.textContent='Invalid status.'; return; }
-  if (!action && status===statusOf(issue) && hasRecordedStatus(issue)) { message.textContent='Enter an action or change status.'; return; }
-  button.disabled=true; message.textContent='Saving...';
-  try {
-    const ref=issuesRef.doc(id);
-    await db.runTransaction(async tx => {
-      const snap=await tx.get(ref);
-      const current=snap.exists ? snap.data() : issue;
-      const previous=statusOf(current);
-      const date=new Date().toISOString();
-      const actions=[...actionsOf(current)];
-      if (action) actions.push({name,action,date});
-      const statusHistory=[...historyOf(current),{date,status,previousStatus:hasRecordedStatus(current)?previous:null,updatedBy:name,action:action||'Status updated'}];
-      const update={actions,statusHistory,status,lastUpdatedBy:name,lastUpdatedAt:date,
-        closedBy:status==='Closed' ? (previous==='Closed' && current.closedBy ? current.closedBy : name) : null,
-        closedAt:status==='Closed' ? (previous==='Closed' && current.closedAt ? current.closedAt : date) : null};
-      if (snap.exists) tx.update(ref,update);
-      else tx.set(ref,{...issue,...update,legacy:true});
-    });
-    await loadData();
-  } catch(e) { console.error(e); message.textContent='Unable to save. Check Firestore permissions.'; button.disabled=false; }
-}
+  const editor = button.closest(".followup-editor");
+  if (!editor) return;
 
-function exportReportsToExcel(data,name) {
-  if (!data.length) { alert('No reports to export.'); return; }
-  if (typeof XLSX==='undefined') { alert('Excel library is unavailable.'); return; }
-  const rows=[['Date','Employee Name','Badge Number','Section','Shift','Priority','Report Content','Follow-up Actions','Status','Closed By','Last Updated By']];
-  for (const r of data) {
-    const own=allIssues.filter(i => i.reportId===r.id);
-    rows.push([r.dateDisplay||fmt(reportDate(r)),r.employeeName||'',r.badgeNumber||'',r.section||'',r.shift||'',r.priority||'',r.content||'',own.map(i => `${i.category||'Issue'}: ${i.issue||''}\n${actionsOf(i).map(a=>`${a.name}: ${a.action}`).join('\n')}`).join('\n\n'),own.map(statusOf).join('; '),own.map(i=>i.closedBy||'').filter(Boolean).join('; '),own.map(i=>i.lastUpdatedBy||'').filter(Boolean).join('; ')]);
+  const id = editor.dataset.issueId;
+  const issue = allIssues.find(item => item.id === id);
+  if (!issue) return;
+
+  const badge = editor.querySelector(".f-badge").value.trim();
+  const name = authorizedBadges[badge];
+  const action = editor.querySelector(".f-action").value.trim();
+  const status = editor.querySelector(".f-status").value;
+  const message = editor.querySelector(".followup-message");
+
+  if (!name) {
+    message.textContent = "Unauthorized badge number.";
+    return;
   }
-  const sheet=XLSX.utils.aoa_to_sheet(rows);
-  sheet['!cols']=[{wch:24},{wch:25},{wch:16},{wch:24},{wch:14},{wch:14},{wch:75},{wch:75},{wch:25},{wch:26},{wch:26}];
-  rows.forEach((row,r)=>row.forEach((_,c)=>{
-    const cell=sheet[XLSX.utils.encode_cell({r,c})];if (!cell) return;
-    cell.s={alignment:{vertical:'top',wrapText:true}};
-    if (r===0) cell.s={...cell.s,fill:{fgColor:{rgb:'102B43'}},font:{bold:true,color:{rgb:'FFFFFF'}}};
-  }));
-  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'Reports');
-  XLSX.writeFile(book,`${name}_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-function exportFilteredToCSV(){exportReportsToExcel(filteredReports,'Filtered_Pharmacy_Reports')}
-function exportAllToCSV(){exportReportsToExcel(reports,'All_Pharmacy_Reports')}
 
-document.addEventListener('DOMContentLoaded',()=>{
-  el('reportForm')?.addEventListener('submit',saveReport);
-  el('addIssueBtn')?.addEventListener('click',addIssueInput);
-  document.addEventListener('click',event=>{
-    const detail=event.target.closest('.open-issue-details');
-    if(detail){openIssueDetails(detail.dataset.issueId);return;}
-    if(event.target.closest('.close-issue-details')){
-      const panel=el('issueDetailsPanel');if(panel)panel.style.display='none';return;
-    }
-    const btn=event.target.closest('.followup-save'); if (btn) saveFollowup(btn);
+  if (!STATUSES.includes(status)) {
+    message.textContent = "Invalid status.";
+    return;
+  }
+
+  if (!action && status === statusOf(issue) &&
+      hasRecordedStatus(issue)) {
+    message.textContent = "Enter an action or change status.";
+    return;
+  }
+
+  button.disabled = true;
+  message.textContent = "Saving...";
+
+  try {
+    const ref = issuesRef.doc(id);
+
+    await db.runTransaction(async transaction => {
+      const snapshot = await transaction.get(ref);
+
+      const current = snapshot.exists
+        ? snapshot.data()
+        : issue;
+
+      const previous = statusOf(current);
+      const date = new Date().toISOString();
+
+      const actions = [...actionsOf(current)];
+
+      if (action) {
+        actions.push({ name, action, date });
+      }
+
+      const statusHistory = [
+        ...historyOf(current),
+        {
+          date,
+          status,
+          previousStatus: hasRecordedStatus(current)
+            ? previous
+            : null,
+          updatedBy: name,
+          action: action || "Status updated"
+        }
+      ];
+
+      const update = {
+        actions,
+        statusHistory,
+        status,
+        lastUpdatedBy: name,
+        lastUpdatedAt: date,
+        closedBy: status === "Closed" ? name : null,
+        closedAt: status === "Closed" ? date : null
+      };
+
+      if (snapshot.exists) {
+        transaction.update(ref, update);
+      } else {
+        transaction.set(ref, {
+          ...issue,
+          ...update,
+          legacy: true
+        });
+      }
+    });
+
+    await loadData();
+
+  } catch (error) {
+    console.error(error);
+    message.textContent =
+      "Unable to save. Check Firestore permissions.";
+    button.disabled = false;
+  }
+}
+
+// EXCEL EXPORT
+
+function exportReportsToExcel(data, filename) {
+  if (!data.length) {
+    alert("No reports to export.");
+    return;
+  }
+
+  if (typeof XLSX === "undefined") {
+    alert("Excel library is unavailable.");
+    return;
+  }
+
+  const rows = [[
+    "Date",
+    "Employee Name",
+    "Badge Number",
+    "Section",
+    "Shift",
+    "Priority",
+    "Report Content",
+    "Follow-up Actions",
+    "Status",
+    "Closed By",
+    "Last Updated By"
+  ]];
+
+  data.forEach(report => {
+    const related = allIssues.filter(
+      issue => issue.reportId === report.id
+    );
+
+    rows.push([
+      report.dateDisplay || fmt(reportDate(report)),
+      report.employeeName || "",
+      report.badgeNumber || "",
+      report.section || "",
+      report.shift || "",
+      report.priority || "",
+      report.content || "",
+      related.map(issue =>
+        `${issue.category || "Issue"}: ${issue.issue || ""}\n` +
+        actionsOf(issue).map(action =>
+          `${action.name}: ${action.action}`
+        ).join("\n")
+      ).join("\n\n"),
+      related.map(statusOf).join("; "),
+      related.map(issue => issue.closedBy || "")
+        .filter(Boolean).join("; "),
+      related.map(issue => issue.lastUpdatedBy || "")
+        .filter(Boolean).join("; ")
+    ]);
   });
-  ['monitoringWeek','monitoringSection','monitoringStatus'].forEach(id=>el(id)?.addEventListener('change',renderMonitoring));
-  setCurrentWeek();loadData();
+
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+
+  sheet["!cols"] = [
+    { wch: 24 }, { wch: 25 }, { wch: 16 },
+    { wch: 24 }, { wch: 14 }, { wch: 14 },
+    { wch: 75 }, { wch: 75 }, { wch: 25 },
+    { wch: 26 }, { wch: 26 }
+  ];
+
+  const book = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    book,
+    sheet,
+    "Reports"
+  );
+
+  XLSX.writeFile(
+    book,
+    `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`
+  );
+}
+
+window.exportFilteredToCSV = function() {
+  exportReportsToExcel(
+    filteredReports,
+    "Filtered_Pharmacy_Reports"
+  );
+};
+
+window.exportAllToCSV = function() {
+  exportReportsToExcel(
+    reports,
+    "All_Pharmacy_Reports"
+  );
+};
+
+// INITIALIZE
+
+document.addEventListener("DOMContentLoaded", () => {
+  el("reportForm")?.addEventListener(
+    "submit",
+    saveReport
+  );
+
+  el("addIssueBtn")?.addEventListener(
+    "click",
+    addIssueInput
+  );
+
+  document.addEventListener("click", event => {
+    const detail = event.target.closest(".open-issue-details");
+
+    if (detail) {
+      openIssueDetails(detail.dataset.issueId);
+      return;
+    }
+
+    if (event.target.closest(".close-issue-details")) {
+      const panel = el("issueDetailsPanel");
+      if (panel) panel.style.display = "none";
+      return;
+    }
+
+    const saveButton = event.target.closest(".followup-save");
+
+    if (saveButton) {
+      saveFollowup(saveButton);
+    }
+  });
+
+  [
+    "monitoringWeek",
+    "monitoringSection",
+    "monitoringStatus"
+  ].forEach(id => {
+    el(id)?.addEventListener(
+      "change",
+      renderMonitoring
+    );
+  });
+
+  setCurrentWeek();
+  loadData();
 });
