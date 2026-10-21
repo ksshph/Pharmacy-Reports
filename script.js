@@ -1,5 +1,6 @@
+
 const firebaseConfig = {
-  apiKey: "AIzaSyBqgeFglHVOuP8-p1AIAIa3tBEonD5DPt8",
+  apiKey: "AIzaSyBqgeFglHVOuP8x-p1AIAIa3tBEonD5DPt8",
   authDomain: "pharmacyshift.firebaseapp.com",
   projectId: "pharmacyshift",
   storageBucket: "pharmacyshift.firebasestorage.app",
@@ -8,9 +9,7 @@ const firebaseConfig = {
   measurementId: "G-WPJ95C048P"
 };
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
 const db = firebase.firestore();
 const reportsRef = db.collection("Shift Coordinator Reports");
@@ -30,200 +29,264 @@ const authorizedBadges = {
   "1003972": "Ms. Nidaa Alhumaidi",
   "1003968": "Ms. Rahaf Alzaydani",
   "7000375": "Dr. Rami Al Khaldi",
-  "5874336": "Dr. Sultan Alotaibi"
+  "5874336": "Dr. Sultan Alotaibi",
+  "7000403": "Dr. Shahad Alwagdani",
+  "7000324": "Dr. Aisha Majrabi"
 };
 
+const AREAS = [
+  "ER Pharmacy",
+  "IV Pharmacy",
+  "Inpatient Pharmacy",
+  "Outpatient Pharmacy",
+  "Clinical Services",
+  "Material Management",
+  "OR Pharmacy"
+];
+
+const CATEGORIES = [
+  ["Material Management", "area_material"],
+  ["Automation and Informatics", "area_automation"],
+  ["Drug Repackaging and Unit Dose", "area_repackaging"],
+  ["Clinical Services", "area_clinical"],
+  ["Narcotic and Psychotropic Substances", "area_narcotics"],
+  ["Inpatient Services", "area_inpatient"],
+  ["IV", "area_iv"]
+];
+
 const STATUSES = ["Open", "Under Processing", "Closed"];
+const START_MS = Date.parse("2026-10-13T00:00:00+03:00");
+const SAUDI_TZ = "Asia/Riyadh";
 
 let reports = [];
 let savedIssues = [];
 let allIssues = [];
 let filteredReports = [];
+let monitoringShown = [];
+let previewSignature = "";
 
 const el = id => document.getElementById(id);
 const val = id => (el(id)?.value || "").trim();
 
-const esc = value => String(value ?? "").replace(
-  /[&<>"']/g,
-  c => ({
+function esc(x) {
+  return String(x ?? "").replace(/[&<>"']/g, c => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;"
-  }[c])
-);
-
-function toDate(value) {
-  if (!value) return null;
-  const date = typeof value.toDate === "function"
-    ? value.toDate()
-    : new Date(value);
-  return Number.isFinite(date.getTime()) ? date : null;
+  })[c]);
 }
 
-function fmt(value) {
-  const date = toDate(value);
-  return date
-    ? date.toLocaleString("en-GB", {
+function toDate(x) {
+  if (!x) return null;
+  const d = typeof x.toDate === "function" ? x.toDate() : new Date(x);
+  return Number.isFinite(d.getTime()) ? d : null;
+}
+
+function fmt(x) {
+  const d = toDate(x);
+  return d
+    ? new Intl.DateTimeFormat("en-GB", {
+        timeZone: SAUDI_TZ,
         day: "2-digit",
         month: "short",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit"
-      })
+      }).format(d)
     : "—";
 }
 
-function reportDate(report) {
-  return toDate(
-    report.date ||
-    report.createdAt ||
-    report.timestamp
+function saudiDay(x) {
+  const d = toDate(x);
+  if (!d) return "";
+
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SAUDI_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(d);
+
+  const part = type => parts.find(p => p.type === type)?.value;
+
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function todaySaudi() {
+  return saudiDay(new Date());
+}
+
+function dayMs(day) {
+  return Date.parse(`${day}T00:00:00+03:00`);
+}
+
+function reportTime(r) {
+  return toDate(r.createdAt || r.date || r.timestamp);
+}
+
+function issueTime(i) {
+  return toDate(i.createdAt || i.date);
+}
+
+function isRoutine(text) {
+  return /^(n|no|none|nil|n\/a|na|nothing|no issues?|not applicable|لا يوجد|لا توجد|لا شيء|[-–—.]|\s*)$/i
+    .test(String(text || "").trim());
+}
+
+function purposeLabel(p) {
+  return ({
+    handover: "For Handover Only",
+    action: "For Action",
+    both: "For Handover & Action"
+  })[p] || "Unspecified";
+}
+
+function normalizeArea(s) {
+  return s === "IV" ? "IV Pharmacy" : (s || "Other");
+}
+
+function sectionDisplay(i) {
+  const from = normalizeArea(i.fromSection || i.section);
+  const to = i.sentTo || "";
+  return from + (to && to !== from ? ` → ${to}` : "");
+}
+
+function fillSelect(id, items, placeholder) {
+  el(id).innerHTML =
+    `<option value="">${esc(placeholder)}</option>` +
+    items.map(x =>
+      `<option value="${esc(x)}">${esc(x)}</option>`
+    ).join("");
+}
+
+function setupFields() {
+  fillSelect("section", AREAS, "Select Area / From Section");
+  fillSelect("sentTo", AREAS, "Select Section (Optional)");
+  fillSelect("filterSection", AREAS, "All Sections");
+  fillSelect("monitoringSection", AREAS, "All Sections");
+
+  fillSelect(
+    "monitoringCategory",
+    CATEGORIES.map(x => x[0]).concat(["In-Charge Endorsement"]),
+    "All Categories"
   );
+
+  el("categoryFields").innerHTML = CATEGORIES.map(([name, id]) => `
+    <details class="entry-accordion">
+      <summary>
+        <span>${esc(name)}</span>
+        <span class="filled-mark" id="mark_${id}" hidden>✓ Filled</span>
+      </summary>
+      <div class="entry-body">
+        <label for="${id}">Issue / Endorsement (Optional)</label>
+        <textarea id="${id}" rows="4"
+          placeholder="Write the full issue or endorsement..."></textarea>
+      </div>
+    </details>
+  `).join("");
+
+  el("reportDate").value = todaySaudi();
+  el("monitoringFrom").value = "2026-10-13";
+  el("monitoringTo").value = todaySaudi();
+
+  CATEGORIES.forEach(([, id]) => {
+    el(id).addEventListener("input", () => {
+      el("mark_" + id).hidden = !val(id);
+      previewSignature = "";
+    });
+  });
+
+  el("reportForm").querySelectorAll("input,select,textarea")
+    .forEach(node => node.addEventListener("input", () => {
+      if (node.id !== "reportContent") previewSignature = "";
+    }));
 }
 
-function issueDate(issue) {
-  return toDate(issue.createdAt || issue.date);
-}
-
-function statusOf(issue) {
-  const status = issue.status || issue.followupStatus;
-  return STATUSES.includes(status) ? status : "Open";
-}
-
-function actionsOf(issue) {
-  if (Array.isArray(issue.actions)) return issue.actions;
-  if (Array.isArray(issue.followupActions)) {
-    return issue.followupActions;
-  }
-  return [];
-}
-
-function statusTag(status) {
-  const className = status.toLowerCase().replace(/\s+/g, "-");
-  return `<span class="status-pill ${className}">${esc(status)}</span>`;
-}
-
-// PAGE NAVIGATION
-
-window.showPage = function(pageId) {
-  const target = el(pageId);
-
-  if (!target) {
-    console.error("Page not found:", pageId);
-    return;
-  }
+window.showPage = function(id) {
+  if (!el(id)) return;
 
   document.querySelectorAll(".page").forEach(page => {
     page.classList.remove("active");
-    page.style.display = "none";
   });
 
-  target.classList.add("active");
-  target.style.display = pageId === "homePage"
-    ? "flex"
-    : "block";
-
+  el(id).classList.add("active");
   window.scrollTo(0, 0);
-
-  if (pageId === "weeklyMonitoringPage") {
-    setCurrentWeek();
-  }
 
   if ([
     "latestReportsPage",
     "viewReportsPage",
     "weeklyMonitoringPage"
-  ].includes(pageId)) {
+  ].includes(id)) {
     loadData();
   }
 };
 
-// REPORT GENERATION
+function answersNow() {
+  return {
+    employeeName: val("employeeName"),
+    badgeNumber: val("badgeNumber"),
+    reportDate: val("reportDate"),
+    section: val("section"),
+    sentTo: val("sentTo"),
+    shift: val("shift"),
+    present: val("q_present"),
+    attendanceUpdates: val("q_absence"),
+    areas: Object.fromEntries(
+      CATEGORIES.map(([name, id]) => [name, val(id)])
+    ),
+    incharge: val("area_incharge"),
+    handover: val("area_handover"),
+    purpose: val("reportPurpose")
+  };
+}
+
+function signature(a) {
+  return JSON.stringify(a);
+}
+
+function previewText(a) {
+  return [
+    "PHARMACY SHIFT REPORT",
+    "",
+    `Date: ${a.reportDate}`,
+    `Prepared By: ${a.employeeName}`,
+    `Badge Number: ${a.badgeNumber}`,
+    `From Section: ${a.section}`,
+    ...(a.sentTo ? [`Sent To: ${a.sentTo}`] : []),
+    `Shift: ${a.shift}`,
+    "",
+    "ATTENDANCE",
+    `Staff Present:\n${a.present || "—"}`,
+    `Attendance Updates:\n${a.attendanceUpdates || "—"}`,
+    "",
+    "ISSUES / ENDORSEMENTS",
+    ...CATEGORIES.map(([name]) =>
+      `${name}:\n${a.areas[name] || "No issues reported"}\n`
+    ),
+    "IN-CHARGE ENDORSEMENT",
+    a.incharge || "No endorsement",
+    "",
+    "NEXT SHIFT HANDOVER",
+    a.handover || "No handover",
+    "",
+    `Report Purpose: ${purposeLabel(a.purpose)}`
+  ].join("\n");
+}
 
 window.generateReport = function() {
-  const form = el("reportForm");
-  const preview = el("reportContent");
+  if (!el("reportForm").reportValidity()) return;
 
-  if (!form || !preview) return;
+  const a = answersNow();
+  el("reportContent").value = previewText(a);
+  previewSignature = signature(a);
 
-  const required = preview.required;
-  preview.required = false;
-
-  const valid = form.reportValidity();
-  preview.required = required;
-
-  if (!valid) return;
-
-  const fields = [
-    ["Staff Present", "q_present"],
-    ["Attendance Updates", "q_absence"],
-    ["Previous Shift Issues", "q_previous"],
-    ["New Issues", "q_new"],
-    ["Actions Taken During Shift", "q_actions"],
-    ["Endorsement to Next Shift", "q_next"],
-    ["Priority", "q_priority"],
-    ["Additional Notes", "q_notes"],
-    ["Medication Shortage", "q_shortage"]
-  ];
-
-  const content = fields.map(
-    ([label, id]) => `${label}: ${val(id)}`
-  ).join("\n\n");
-
-  const individualIssues = getNewIssues().map(
-    (item, index) =>
-      `${index + 1}. ${item.issue}` +
-      (item.action ? `\nInitial Action: ${item.action}` : "")
-  ).join("\n\n");
-
-  preview.value =
-    "Pharmacy Shift Report\n\n" +
-    `Report prepared by ${val("employeeName")}, ` +
-    `Badge Number ${val("badgeNumber")}, ` +
-    `for ${val("section")}, ${val("shift")} shift.\n\n` +
-    content +
-    "\n\nIndividual Issues / Endorsements:\n" +
-    (individualIssues || "None");
+  el("reportContent").scrollIntoView({
+    behavior: "smooth",
+    block: "center"
+  });
 };
-
-function addIssueInput() {
-  const container = el("issueInputs");
-  if (!container) return;
-
-  const box = document.createElement("div");
-  box.className = "issue-entry";
-
-  box.innerHTML = `
-    <label>
-      Issue / Endorsement
-      <textarea class="new-issue-description"
-        placeholder="Enter complete issue details"></textarea>
-    </label>
-    <label>
-      Initial Action Taken
-      <textarea class="new-issue-action"></textarea>
-    </label>
-    <button type="button" class="secondary remove-issue">
-      Remove Issue
-    </button>
-  `;
-
-  box.querySelector(".remove-issue").onclick = () => box.remove();
-  container.appendChild(box);
-}
-
-function getNewIssues() {
-  return [...document.querySelectorAll(
-    "#issueInputs .issue-entry"
-  )].map(box => ({
-    issue: box.querySelector(".new-issue-description").value.trim(),
-    action: box.querySelector(".new-issue-action").value.trim()
-  }));
-}
-
-// SAVE REPORT
 
 async function saveReport(event) {
   event.preventDefault();
@@ -231,463 +294,403 @@ async function saveReport(event) {
   const form = el("reportForm");
   if (!form.reportValidity()) return;
 
-  const items = getNewIssues();
+  const a = answersNow();
 
-  if (items.some(item => !item.issue)) {
-    alert("Complete all individual issues.");
-    return;
-  }
-
-  if (!val("reportContent")) {
-    alert("Generate Report Preview first.");
+  if (previewSignature !== signature(a) || !val("reportContent")) {
+    alert("Please generate the report preview after your latest changes.");
     return;
   }
 
   const button = form.querySelector('[type="submit"]');
   button.disabled = true;
 
-  const date = new Date().toISOString();
-  const ref = reportsRef.doc();
-
-  const answers = {
-    present: val("q_present"),
-    attendanceUpdates: val("q_absence"),
-    previousShiftIssues: val("q_previous"),
-    newRisingIssues: val("q_new"),
-    actionsTaken: val("q_actions"),
-    nextShiftEndorsement: val("q_next"),
-    priority: val("q_priority"),
-    additionalNotes: val("q_notes"),
-    medicationShortage: val("q_shortage")
-  };
-
-  const report = {
-    date,
-    createdAt: date,
-    dateDisplay: fmt(date),
-    employeeName: val("employeeName"),
-    badgeNumber: val("badgeNumber"),
-    section: val("section"),
-    shift: val("shift"),
-    priority: val("q_priority"),
-    content: val("reportContent"),
-    structuredAnswers: answers,
-    followupStatus: "Open",
-    followupActions: [],
-    issueCount: items.length
-  };
-
   try {
+    const ref = reportsRef.doc();
+    const now = new Date().toISOString();
+
+    const entries = CATEGORIES.map(([category, id]) => ({
+      area: category,
+      category,
+      text: val(id)
+    })).filter(x => x.text && !isRoutine(x.text));
+
+    if (a.incharge && !isRoutine(a.incharge)) {
+      entries.push({
+        area: "In-Charge Endorsement",
+        category: "In-Charge Endorsement",
+        text: a.incharge
+      });
+    }
+
+    const report = {
+      date: now,
+      createdAt: now,
+      reportDate: a.reportDate,
+      employeeName: a.employeeName,
+      badgeNumber: a.badgeNumber,
+      section: a.section,
+      fromSection: a.section,
+      sentTo: a.sentTo,
+      shift: a.shift,
+      priority: "Normal",
+      content: val("reportContent"),
+      structuredAnswers: {
+        present: a.present,
+        attendanceUpdates: a.attendanceUpdates,
+        areas: a.areas,
+        incharge: a.incharge,
+        handover: a.handover
+      },
+      areaEntries: entries,
+      reportPurpose: a.purpose,
+      issueCount: entries.length,
+      entryClassificationVersion: 5
+    };
+
     const batch = db.batch();
     batch.set(ref, report);
 
-    for (const item of items) {
+    entries.forEach(entry => {
       const issueRef = issuesRef.doc();
 
       batch.set(issueRef, {
         reportId: ref.id,
-        date,
-        createdAt: date,
-        section: report.section,
-        shift: report.shift,
-        priority: report.priority,
-        issue: item.issue,
-        description: item.issue,
-        status: "Open",
-        statusHistory: [{
-          date,
-          status: "Open",
-          previousStatus: null,
-          updatedBy: report.employeeName,
-          action: item.action || "Issue reported"
-        }],
-        actions: item.action ? [{
-          name: report.employeeName,
-          action: item.action,
-          date
-        }] : [],
-        lastUpdatedBy: item.action ? report.employeeName : "",
+        date: now,
+        createdAt: now,
+        reportDate: a.reportDate,
+        section: a.section,
+        fromSection: a.section,
+        sentTo: a.sentTo,
+        shift: a.shift,
+        area: entry.category,
+        category: entry.category,
+        issue: entry.text,
+        description: entry.text,
+        classification: a.purpose,
+        reportPurpose: a.purpose,
+        status: a.purpose === "handover" ? "Handover" : "Open",
+        actions: [],
+        statusHistory: [],
+        lastUpdatedBy: "",
         closedAt: null,
         closedBy: null
       });
-    }
+    });
 
     await batch.commit();
 
     form.reset();
-    el("issueInputs").innerHTML = "";
+    el("reportDate").value = todaySaudi();
+    el("reportContent").value = "";
+    previewSignature = "";
+
+    document.querySelectorAll(".entry-accordion").forEach(d => {
+      d.open = false;
+    });
+
+    CATEGORIES.forEach(([, id]) => {
+      el("mark_" + id).hidden = true;
+    });
 
     alert("Report saved successfully.");
     showPage("latestReportsPage");
 
   } catch (error) {
     console.error(error);
-    alert("Unable to save report. Check Firebase permissions.");
+    alert("Unable to save report. Check Firebase access.");
   } finally {
     button.disabled = false;
   }
 }
 
-// LEGACY REPORT ISSUES
-
-function isRoutine(text) {
-  return /^(yes|no|none|nil|n\/a|nothing|no issues?|no shortage reported|لا|نعم|لا يوجد|-|\.)$/i
-    .test(String(text || "").trim());
+function actionsOf(i) {
+  return Array.isArray(i.actions)
+    ? i.actions
+    : Array.isArray(i.followupActions) ? i.followupActions : [];
 }
 
-function splitNarratives(raw) {
-  const text = String(raw || "").trim();
-
-  if (!text || isRoutine(text)) return [];
-
-  return text
-    .split(/\n(?=\s*(?:\d+[.)]|[-•*])\s+)/)
-    .map(x => x.trim().replace(/^(?:\d+[.)]|[-•*])\s+/, ""))
-    .filter(x => x && !isRoutine(x));
+function historyOf(i) {
+  return Array.isArray(i.statusHistory) ? i.statusHistory : [];
 }
 
-function extractLegacy(report) {
-  const answers = report.structuredAnswers || {};
+function statusOf(i) {
+  const s = i.status || i.followupStatus;
+  return STATUSES.includes(s) ? s : "Open";
+}
 
-  const fields = [
-    [
-      "Previous Shift Issues",
-      answers.previousShiftIssues || answers.previousIssues
-    ],
-    [
-      "New Issues",
-      answers.newRisingIssues || answers.newIssues
-    ],
-    [
-      "Next Shift Endorsement",
-      answers.nextShiftEndorsement || answers.endorsementToNextShift
-    ],
-    [
-      "Additional Notes",
-      answers.additionalNotes || answers.notes
-    ]
-  ];
+function tag(s) {
+  return `<span class="status-pill ${esc(
+    s.toLowerCase().replace(/\s+/g, "-")
+  )}">${esc(s)}</span>`;
+}
 
-  if (!fields.some(item => String(item[1] || "").trim())) {
-    const content = String(report.content || "");
-    const labels = [
-      ["Previous Shift Issues",
-        /(?:Previous Shift Issues|Endorsed issues from the previous shift):\s*/i],
-      ["New Issues",
-        /(?:New Issues|New or rising issues during the shift):\s*/i],
-      ["Next Shift Endorsement",
-        /(?:Endorsement to Next Shift|Next Shift Endorsement|Items to be endorsed to the next shift):\s*/i],
-      ["Additional Notes", /Additional Notes:\s*/i]
-    ];
+function historyHTML(i) {
+  const history = historyOf(i);
 
-    const lines = content.split(/\r?\n/);
-    const boundary = /^(?:Staff Present|Attendance Updates|Previous Shift Issues|New Issues|Actions Taken|Endorsement to Next Shift|Next Shift Endorsement|Priority|Additional Notes|Medication Shortage|Individual Issues)/i;
-
-    labels.forEach(([name, regex], index) => {
-      const start = lines.findIndex(line => regex.test(line.trim()));
-      if (start < 0) return;
-
-      const collected = [
-        lines[start].trim().replace(regex, "")
-      ];
-
-      for (let j = start + 1; j < lines.length; j++) {
-        if (boundary.test(lines[j].trim())) break;
-        collected.push(lines[j]);
-      }
-
-      fields[index][1] = collected.join("\n").trim();
-    });
+  if (history.length) {
+    return history.map(x => `
+      <div class="action-entry">
+        <strong>${esc(x.updatedBy || x.name || "—")}</strong>
+        ${x.status ? tag(x.status) : ""}
+        <div>${esc(x.action || "")}</div>
+        <small>${esc(fmt(x.date))}</small>
+      </div>
+    `).join("");
   }
 
-  const result = [];
+  const actions = actionsOf(i);
 
-  fields.forEach(([category, raw], fieldIndex) => {
-    splitNarratives(raw).forEach((description, index) => {
-      result.push({
-        id: `legacy_${report.id}_${fieldIndex}_${index}`,
-        reportId: report.id,
-        date: report.date || report.createdAt,
-        createdAt: report.date || report.createdAt,
-        section: report.section || "Other",
-        category,
-        issue: description,
-        description,
-        status: null,
-        actions: [],
-        statusHistory: [],
-        closedAt: null,
-        closedBy: null,
-        legacy: true
-      });
-    });
+  return actions.length
+    ? actions.map(x => `
+      <div class="action-entry">
+        <strong>${esc(x.name || "—")}</strong>
+        <div>${esc(x.action || "")}</div>
+        <small>${esc(fmt(x.date))}</small>
+      </div>
+    `).join("")
+    : "<p>No action recorded.</p>";
+}
+
+function legacyIssues(r) {
+  if (Number(r.entryClassificationVersion) >= 2) return [];
+
+  const a = r.structuredAnswers || {};
+  const fields = [
+    ["Previous Shift Issues", a.previousShiftIssues || a.previousIssues],
+    ["New Issues", a.newRisingIssues || a.newIssues],
+    ["Next Shift Endorsement", a.nextShiftEndorsement || a.endorsementToNextShift],
+    ["Additional Notes", a.additionalNotes || a.notes]
+  ];
+
+  return fields.flatMap(([category, text], idx) => {
+    if (!text || isRoutine(text)) return [];
+
+    return [{
+      id: `legacy_${r.id}_${idx}`,
+      reportId: r.id,
+      date: r.date || r.createdAt,
+      createdAt: r.date || r.createdAt,
+      section: r.section,
+      category,
+      issue: String(text),
+      classification: "unreviewed",
+      status: "Open",
+      actions: [],
+      legacy: true
+    }];
   });
-
-  return result;
 }
 
 function buildIssues() {
-  const savedIds = new Set(savedIssues.map(issue => issue.id));
-  const combined = [...savedIssues];
+  allIssues = [...savedIssues];
+  const keys = new Set(savedIssues.map(x => x.id));
 
-  reports.forEach(report => {
-    const existingTexts = new Set(
-      savedIssues
-        .filter(issue => issue.reportId === report.id)
-        .map(issue =>
-          String(issue.issue || issue.description || "")
-            .trim()
-            .toLowerCase()
-        )
-    );
-
-    extractLegacy(report).forEach(issue => {
-      const text = issue.issue.trim().toLowerCase();
-
-      if (savedIds.has(issue.id) || existingTexts.has(text)) {
-        return;
+  reports.forEach(r => {
+    legacyIssues(r).forEach(i => {
+      if (!keys.has(i.id)) {
+        allIssues.push(i);
+        keys.add(i.id);
       }
-
-      combined.push(issue);
-      existingTexts.add(text);
     });
   });
-
-  allIssues = combined;
 }
-
-// LOAD FIREBASE DATA
 
 async function loadData() {
   try {
-    const [reportSnapshot, issueSnapshot] = await Promise.all([
+    const [rs, is] = await Promise.all([
       reportsRef.get(),
       issuesRef.get()
     ]);
 
-    reports = reportSnapshot.docs.map(doc => ({
-      ...doc.data(),
-      id: doc.id
+    reports = rs.docs.map(d => ({
+      id: d.id,
+      ...d.data()
+    }));
+
+    savedIssues = is.docs.map(d => ({
+      id: d.id,
+      ...d.data()
     }));
 
     reports.sort((a, b) =>
-      (reportDate(b)?.getTime() || 0) -
-      (reportDate(a)?.getTime() || 0)
+      (reportTime(b)?.getTime() || 0) -
+      (reportTime(a)?.getTime() || 0)
     );
 
-    savedIssues = issueSnapshot.docs.map(doc => ({
-      ...doc.data(),
-      id: doc.id
-    }));
-
     buildIssues();
-
-    filteredReports = [...reports];
-
+    filterReports();
     renderLatest();
-    renderAll();
     renderMonitoring();
 
   } catch (error) {
     console.error(error);
 
     ["latestReportsList", "allReportsList"].forEach(id => {
-      if (el(id)) {
-        el(id).textContent = "Unable to load reports.";
-      }
+      el(id).textContent = "Unable to load reports.";
     });
 
-    if (el("monitoringTableBody")) {
-      el("monitoringTableBody").innerHTML =
-        '<tr><td colspan="7">Unable to load issues.</td></tr>';
-    }
+    el("monitoringTableBody").innerHTML =
+      '<tr><td colspan="9">Unable to load monitoring data.</td></tr>';
   }
 }
 
-// REPORT DISPLAY
-
-function historyOf(issue) {
-  return Array.isArray(issue.statusHistory)
-    ? [...issue.statusHistory].sort(
-        (a, b) =>
-          (toDate(a.date)?.getTime() || 0) -
-          (toDate(b.date)?.getTime() || 0)
-      )
-    : [];
-}
-
-function historyHTML(issue) {
-  const history = historyOf(issue);
-
-  if (history.length) {
-    return history.map(entry => `
-      <div class="action-entry">
-        <strong>${esc(entry.updatedBy || "")}</strong>
-        ${entry.status ? statusTag(entry.status) : ""}
-        <div>${esc(entry.action || "")}</div>
-        <small>${esc(fmt(entry.date))}</small>
-      </div>
-    `).join("");
-  }
-
-  const actions = actionsOf(issue);
-
-  return actions.length
-    ? actions.map(action => `
-        <div class="action-entry">
-          <strong>${esc(action.name || "")}</strong>
-          <div>${esc(action.action || "")}</div>
-          <small>${esc(fmt(action.date))}</small>
-        </div>
-      `).join("")
-    : "<p>No action recorded.</p>";
-}
-
-function editorHTML(issue) {
-  return `
-    <div class="followup-editor" data-issue-id="${esc(issue.id)}">
-      <label>Authorized Badge
-        <input class="f-badge" type="password" inputmode="numeric">
-      </label>
-
-      <label>Action Taken
-        <textarea class="f-action"></textarea>
-      </label>
-
-      <label>Status
-        <select class="f-status">
-          ${STATUSES.map(status => `
-            <option value="${status}"
-              ${statusOf(issue) === status ? "selected" : ""}>
-              ${status}
-            </option>
-          `).join("")}
-        </select>
-      </label>
-
-      <button type="button" class="followup-save">
-        Save Follow-up
-      </button>
-
-      <p class="followup-message"></p>
-    </div>
-  `;
-}
-
-function issueHTML(issue) {
-  return `
-    <div class="issue-card">
-      <strong>${esc(issue.category || "Issue")}:
-        ${esc(issue.issue || issue.description || "")}
-      </strong>
-
-      ${statusTag(statusOf(issue))}
-      ${historyHTML(issue)}
-
-      ${issue.closedBy
-        ? `<p>Closed by: ${esc(issue.closedBy)}</p>`
-        : ""}
-
-      ${editorHTML(issue)}
-    </div>
-  `;
-}
-
-function reportHTML(report) {
-  const related = allIssues.filter(
-    issue => issue.reportId === report.id
+function reportHTML(r) {
+  const related = allIssues.filter(i =>
+    i.reportId === r.id && i.classification !== "unreviewed"
   );
 
-  const priority = ["Normal", "Moderate", "Critical"]
-    .includes(report.priority)
-    ? report.priority
-    : "Normal";
+  const entries = Array.isArray(r.areaEntries) ? r.areaEntries : [];
+  const structured = r.structuredAnswers || {};
+
+  const panels = entries.map(entry => {
+    const linked = related.filter(i =>
+      (i.area || i.category) === entry.area &&
+      String(i.issue || i.description || "").trim() ===
+      String(entry.text || "").trim()
+    );
+
+    return `
+      <details class="area-accordion">
+        <summary>${esc(entry.area)}</summary>
+        <div class="area-details">
+          <p class="issue-original">${esc(entry.text)}</p>
+          ${linked.map(i => `
+            <div>
+              <strong>Status:
+                ${tag(i.status === "Handover" ? "Handover" : statusOf(i))}
+              </strong>
+              ${historyHTML(i)}
+            </div>
+          `).join("")}
+        </div>
+      </details>
+    `;
+  }).join("");
+
+  const extra = related.filter(i =>
+    !entries.some(e =>
+      e.area === (i.area || i.category) &&
+      String(e.text || "").trim() ===
+      String(i.issue || i.description || "").trim()
+    )
+  ).map(i => `
+    <details class="area-accordion">
+      <summary>${esc(i.category || i.area || "Issue")}</summary>
+      <div class="area-details">
+        <p>${esc(i.issue || i.description || "")}</p>
+        ${historyHTML(i)}
+      </div>
+    </details>
+  `).join("");
 
   return `
-    <article class="report-item ${priority.toLowerCase()}">
-      <div class="report-header">
+    <details class="report-accordion">
+      <summary>
         <strong>
-          ${esc(report.employeeName || "Unknown")}
-          — ${esc(report.section || "")}
+          ${esc(normalizeArea(r.section))} — ${esc(r.shift || "Shift")}
         </strong>
-        <span class="priority-badge ${priority.toLowerCase()}">
-          ${priority}
+        <span class="report-meta">
+          ${esc(r.reportDate || saudiDay(reportTime(r)))}
+          · ${esc(r.employeeName || "Unknown")}
+          ${r.sentTo ? " · Sent To: " + esc(r.sentTo) : ""}
         </span>
+      </summary>
+
+      <div class="report-accordion-body">
+        <button class="download-btn" data-download="${esc(r.id)}">
+          Download Report
+        </button>
+
+        <details class="area-accordion">
+          <summary>General Information &amp; Attendance</summary>
+          <div class="area-details">
+            <p><strong>Prepared By:</strong>
+              ${esc(r.employeeName || "—")}</p>
+            <p><strong>Badge:</strong>
+              ${esc(r.badgeNumber || "—")}</p>
+            <p><strong>From:</strong>
+              ${esc(normalizeArea(r.section))}</p>
+            ${r.sentTo ? `<p><strong>Sent To:</strong>
+              ${esc(r.sentTo)}</p>` : ""}
+            <p><strong>Staff Present:</strong>
+              ${esc(structured.present || "—")}</p>
+            <p><strong>Attendance Updates:</strong>
+              ${esc(structured.attendanceUpdates || "—")}</p>
+          </div>
+        </details>
+
+        ${panels}
+        ${extra}
+
+        ${structured.incharge &&
+          !entries.some(e => e.area === "In-Charge Endorsement")
+          ? `<details class="area-accordion">
+              <summary>In-Charge Endorsement</summary>
+              <div class="area-details">
+                <p>${esc(structured.incharge)}</p>
+              </div>
+            </details>`
+          : ""}
+
+        ${structured.handover
+          ? `<details class="area-accordion">
+              <summary>Next Shift Handover</summary>
+              <div class="area-details">
+                <p>${esc(structured.handover)}</p>
+              </div>
+            </details>`
+          : ""}
+
+        <details class="area-accordion">
+          <summary>Full Original Report</summary>
+          <div class="area-details">
+            <div class="report-content">${esc(r.content || "")}</div>
+          </div>
+        </details>
       </div>
-
-      <p class="report-date">
-        ${esc(report.dateDisplay || fmt(reportDate(report)))}
-      </p>
-
-      <div class="report-content">
-        ${esc(report.content || "")}
-      </div>
-
-      ${related.length ? `
-        <div class="followup-panel">
-          <h3>Issue Follow-up</h3>
-          ${related.map(issueHTML).join("")}
-        </div>
-      ` : ""}
-    </article>
+    </details>
   `;
 }
 
 function renderLatest() {
-  const target = el("latestReportsList");
-  if (!target) return;
-
   const sections = [...new Set(
-    reports.map(report => report.section || "Other")
+    reports.map(r => normalizeArea(r.section))
   )];
 
-  target.innerHTML = sections.length
+  el("latestReportsList").innerHTML = sections.length
     ? sections.map(section => `
-        <div class="section-block">
-          <h3>${esc(section)}</h3>
-          ${reports
-            .filter(report => (report.section || "Other") === section)
-            .slice(0, 3)
-            .map(reportHTML)
-            .join("")}
-        </div>
-      `).join("")
+      <div class="section-block">
+        <h3>${esc(section)}</h3>
+        ${reports
+          .filter(r => normalizeArea(r.section) === section)
+          .slice(0, 3)
+          .map(reportHTML)
+          .join("")}
+      </div>
+    `).join("")
     : '<p class="empty-msg">No reports available.</p>';
 }
 
 function renderAll() {
-  const target = el("allReportsList");
+  el("allReportsList").innerHTML = filteredReports.length
+    ? filteredReports.map(reportHTML).join("")
+    : '<p class="empty-msg">No reports found.</p>';
 
-  if (target) {
-    target.innerHTML = filteredReports.length
-      ? filteredReports.map(reportHTML).join("")
-      : '<p class="empty-msg">No reports found.</p>';
-  }
-
-  if (el("reportCount")) {
-    el("reportCount").textContent =
-      `(${filteredReports.length} reports)`;
-  }
+  el("reportCount").textContent =
+    `(${filteredReports.length} reports)`;
 }
 
 window.filterReports = function() {
-  filteredReports = reports.filter(report => {
-    const date = reportDate(report);
-
-    const day = date
-      ? `${date.getFullYear()}-${String(date.getMonth() + 1)
-          .padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-      : "";
+  filteredReports = reports.filter(r => {
+    const day = r.reportDate || saudiDay(reportTime(r));
 
     return (
       (!val("filterStartDate") || day >= val("filterStartDate")) &&
       (!val("filterEndDate") || day <= val("filterEndDate")) &&
       (!val("filterSection") ||
-        report.section === val("filterSection")) &&
-      (!val("filterShift") ||
-        report.shift === val("filterShift")) &&
-      (!val("filterPriority") ||
-        report.priority === val("filterPriority"))
+        normalizeArea(r.section) === val("filterSection")) &&
+      (!val("filterShift") || r.shift === val("filterShift")) &&
+      (!val("filterPriority") || r.priority === val("filterPriority"))
     );
   });
 
@@ -701,310 +704,265 @@ window.resetFilters = function() {
     "filterSection",
     "filterShift",
     "filterPriority"
-  ].forEach(id => {
-    if (el(id)) el(id).value = "";
-  });
+  ].forEach(id => el(id).value = "");
 
-  filteredReports = [...reports];
-  renderAll();
+  filterReports();
 };
 
-// TUESDAY-TO-TUESDAY MONITORING
+// All dates or custom period. No Tuesday-to-Tuesday grouping.
+function monitoringRange() {
+  if (val("monitoringMode") === "all") {
+    return {
+      start: START_MS,
+      end: Date.now() + 1,
+      all: true
+    };
+  }
 
-function tuesdayRange(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return null;
+  const from = val("monitoringFrom");
+  const to = val("monitoringTo");
 
-  const [year, month, day] = value.split("-").map(Number);
-  const chosen = new Date(year, month - 1, day);
-
-  if (
-    chosen.getFullYear() !== year ||
-    chosen.getMonth() !== month - 1 ||
-    chosen.getDate() !== day
-  ) {
+  if (!from || !to || from > to || from < "2026-10-13") {
     return null;
   }
 
-  const offset = (chosen.getDay() - 2 + 7) % 7;
-
-  const start = new Date(
-    year,
-    month - 1,
-    day - offset,
-    0, 0, 0, 0
-  );
-
-  const end = new Date(
-    start.getFullYear(),
-    start.getMonth(),
-    start.getDate() + 7,
-    0, 0, 0, 0
-  );
-
-  return { start, end };
+  return {
+    start: dayMs(from),
+    end: dayMs(to) + 86400000,
+    all: false
+  };
 }
 
-function setCurrentWeek() {
-  const picker = el("monitoringWeek");
-  if (!picker) return;
+function statusAt(i, cutoff) {
+  const history = historyOf(i)
+    .filter(x => STATUSES.includes(x.status) && toDate(x.date))
+    .sort((a, b) => toDate(a.date) - toDate(b.date));
 
-  if (picker.type !== "date") picker.type = "date";
+  if (!history.length) {
+    const closed = toDate(i.closedAt);
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(picker.value)) return;
+    if (closed && closed.getTime() >= cutoff) {
+      return "Open";
+    }
 
-  const today = new Date();
-  const offset = (today.getDay() - 2 + 7) % 7;
-
-  const tuesday = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() - offset
-  );
-
-  picker.value =
-    `${tuesday.getFullYear()}-` +
-    `${String(tuesday.getMonth() + 1).padStart(2, "0")}-` +
-    `${String(tuesday.getDate()).padStart(2, "0")}`;
-}
-
-function hasRecordedStatus(issue) {
-  return STATUSES.includes(issue.status) ||
-    historyOf(issue).some(entry =>
-      STATUSES.includes(entry.status) && !entry.imported
-    );
-}
-
-function bootstrapLegacy(issue) {
-  if (hasRecordedStatus(issue)) return false;
-
-  const created = issueDate(issue);
-  if (!created) return false;
-
-  const launch = new Date("2026-10-12T00:00:00+03:00");
-  const cutoff = new Date(
-    launch.getTime() - 14 * 24 * 60 * 60 * 1000
-  );
-
-  return created >= cutoff;
-}
-
-function statusAt(issue, date) {
-  const entries = historyOf(issue).filter(
-    entry =>
-      STATUSES.includes(entry.status) &&
-      !entry.imported &&
-      toDate(entry.date)
-  );
-
-  if (!entries.length) {
-    const closed = toDate(issue.closedAt);
-    if (closed && closed < date) return "Closed";
-    return statusOf(issue);
+    return statusOf(i);
   }
 
   let status = "Open";
 
-  for (const entry of entries) {
-    if (toDate(entry.date) >= date) break;
-    status = entry.status;
+  for (const x of history) {
+    if (toDate(x.date).getTime() >= cutoff) break;
+    status = x.status;
   }
 
   return status;
 }
 
-function isIncluded(issue, range) {
-  const created = issueDate(issue);
-
-  if (!created || created >= range.end) return false;
-
-  if (!hasRecordedStatus(issue) && !bootstrapLegacy(issue)) {
-    return false;
-  }
-
-  if (created >= range.start) return true;
-
-  if (statusAt(issue, range.start) !== "Closed") return true;
-
-  return historyOf(issue).some(entry => {
-    const date = toDate(entry.date);
-    return date &&
-      date >= range.start &&
-      date < range.end &&
-      entry.status !== "Closed";
-  });
-}
-
-function lastActionAt(issue, cutoff) {
-  return actionsOf(issue)
-    .filter(action =>
-      toDate(action.date) &&
-      toDate(action.date) < cutoff
+function actionAt(i, cutoff) {
+  return [...actionsOf(i)]
+    .filter(a =>
+      toDate(a.date) && toDate(a.date).getTime() < cutoff
     )
     .sort((a, b) => toDate(a.date) - toDate(b.date))
     .at(-1);
 }
 
-function closedByAt(issue, cutoff) {
-  if (statusAt(issue, cutoff) !== "Closed") return "—";
+function closedByAt(i, cutoff) {
+  if (statusAt(i, cutoff) !== "Closed") return "—";
 
-  const entry = historyOf(issue)
-    .filter(item =>
-      item.status === "Closed" &&
-      toDate(item.date) &&
-      toDate(item.date) < cutoff
+  const history = historyOf(i)
+    .filter(x =>
+      x.status === "Closed" &&
+      toDate(x.date) &&
+      toDate(x.date).getTime() < cutoff
     )
-    .at(-1);
+    .sort((a, b) => toDate(a.date) - toDate(b.date));
 
-  return entry?.updatedBy || issue.closedBy || "—";
+  return history.at(-1)?.updatedBy || i.closedBy || "—";
 }
 
 function renderMonitoring() {
+  el("monitoringDateFields").hidden =
+    val("monitoringMode") !== "period";
+
+  const range = monitoringRange();
   const tbody = el("monitoringTableBody");
-  if (!tbody) return;
 
-  setCurrentWeek();
+  if (!range) {
+    monitoringShown = [];
+    tbody.innerHTML =
+      '<tr><td colspan="9">Select valid dates from 13 October 2026.</td></tr>';
 
-  const range = tuesdayRange(val("monitoringWeek"));
-  if (!range) return;
+    [
+      "monitoringTotal",
+      "monitoringPending",
+      "monitoringClosed"
+    ].forEach(id => el(id).textContent = "0");
 
-  let caption = el("tuesdayRangeLabel");
-
-  if (!caption) {
-    caption = document.createElement("p");
-    caption.id = "tuesdayRangeLabel";
-    caption.className = "hint";
-
-    el("monitoringWeek")
-      ?.closest("label")
-      ?.insertAdjacentElement("afterend", caption);
+    return;
   }
 
-  if (caption) {
-    caption.textContent =
-      `Tuesday ${range.start.toLocaleDateString("en-GB")}` +
-      ` → Tuesday ${range.end.toLocaleDateString("en-GB")}`;
-  }
+  const cutoff = Math.min(range.end, Date.now() + 1);
 
-  const asOf = new Date(
-    Math.min(range.end.getTime(), Date.now())
-  );
+  el("monitoringRangeNotice").textContent = range.all
+    ? "All actionable issues created from 13 October 2026."
+    : `Custom Period: ${val("monitoringFrom")} to ${val("monitoringTo")}. Earlier eligible unresolved issues remain visible.`;
 
-  const base = allIssues.filter(issue =>
-    isIncluded(issue, range) &&
-    (!val("monitoringSection") ||
-      issue.section === val("monitoringSection"))
-  );
+  monitoringShown = allIssues.filter(i => {
+    const created = issueTime(i)?.getTime();
 
-  const shown = base.filter(issue =>
-    !val("monitoringStatus") ||
-    statusAt(issue, asOf) === val("monitoringStatus")
-  );
+    if (!created || created < START_MS || created >= cutoff) {
+      return false;
+    }
 
-  if (el("monitoringTotal")) {
-    el("monitoringTotal").textContent = base.length;
-  }
+    if (
+      i.classification === "unreviewed" ||
+      i.classification === "handover" ||
+      i.status === "Handover"
+    ) {
+      return false;
+    }
 
-  if (el("monitoringPending")) {
-    el("monitoringPending").textContent = base.filter(
-      issue => statusAt(issue, asOf) !== "Closed"
+    if (
+      !range.all &&
+      created < range.start &&
+      statusAt(i, range.start) === "Closed"
+    ) {
+      return false;
+    }
+
+    if (
+      val("monitoringSection") &&
+      normalizeArea(i.fromSection || i.section) !==
+        val("monitoringSection")
+    ) {
+      return false;
+    }
+
+    if (
+      val("monitoringCategory") &&
+      (i.category || i.area) !== val("monitoringCategory")
+    ) {
+      return false;
+    }
+
+    if (
+      val("monitoringStatus") &&
+      statusAt(i, cutoff) !== val("monitoringStatus")
+    ) {
+      return false;
+    }
+
+    return true;
+  }).sort((a, b) => issueTime(b) - issueTime(a));
+
+  el("monitoringTotal").textContent = monitoringShown.length;
+
+  el("monitoringPending").textContent =
+    monitoringShown.filter(i =>
+      statusAt(i, cutoff) !== "Closed"
     ).length;
-  }
 
-  if (el("monitoringClosed")) {
-    el("monitoringClosed").textContent = base.filter(
-      issue => statusAt(issue, asOf) === "Closed"
+  el("monitoringClosed").textContent =
+    monitoringShown.filter(i =>
+      statusAt(i, cutoff) === "Closed"
     ).length;
-  }
 
-  shown.sort((a, b) =>
-    (issueDate(b)?.getTime() || 0) -
-    (issueDate(a)?.getTime() || 0)
-  );
-
-  tbody.innerHTML = shown.length
-    ? shown.map(issue => {
-        const latest = lastActionAt(issue, asOf);
-        const carried = issueDate(issue) < range.start;
+  tbody.innerHTML = monitoringShown.length
+    ? monitoringShown.map(i => {
+        const action = actionAt(i, cutoff);
 
         return `
           <tr>
-            <td>${esc(fmt(issueDate(issue)))}</td>
-            <td>${esc(issue.section || "")}</td>
-            <td>
-              <button type="button"
-                class="open-issue-details"
-                data-issue-id="${esc(issue.id)}"
-                style="background:none;border:0;
-                text-align:left;color:#174c72;
-                cursor:pointer;white-space:pre-wrap">
-                ${esc(issue.category || "Issue")}:
-                ${esc(issue.issue || issue.description || "")}
-              </button>
-              ${carried
-                ? '<div class="carry-badge">Carried Forward</div>'
-                : ""}
+            <td>${esc(i.reportDate || saudiDay(issueTime(i)))}</td>
+            <td class="monitoring-section">
+              ${esc(sectionDisplay(i))}
             </td>
-            <td>${esc(latest?.action || "No action recorded")}</td>
-            <td>${esc(latest?.name || "—")}</td>
-            <td>${statusTag(statusAt(issue, asOf))}</td>
-            <td>${esc(closedByAt(issue, asOf))}</td>
+            <td>${esc(i.category || i.area || "General")}</td>
+            <td class="monitoring-issue">
+              ${esc(i.issue || i.description || "")}
+            </td>
+            <td class="monitoring-action">
+              ${esc(action?.action || "Awaiting Action")}
+            </td>
+            <td>${tag(statusAt(i, cutoff))}</td>
+            <td>${esc(action?.name || i.lastUpdatedBy || "—")}</td>
+            <td>${esc(closedByAt(i, cutoff))}</td>
+            <td>
+              <button class="btn-inline" data-issue="${esc(i.id)}">
+                View / Update
+              </button>
+            </td>
           </tr>
         `;
       }).join("")
-    : '<tr><td colspan="7">No issues found for this week.</td></tr>';
+    : '<tr><td colspan="9">No issues found.</td></tr>';
 }
 
-// ISSUE DETAILS
+function openIssue(id) {
+  const i = allIssues.find(x => x.id === id);
+  if (!i) return;
 
-function openIssueDetails(id) {
-  const issue = allIssues.find(item => item.id === id);
-  if (!issue) return;
-
-  let panel = el("issueDetailsPanel");
-
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.id = "issueDetailsPanel";
-    panel.className = "card";
-    el("weeklyMonitoringPage").appendChild(panel);
-  }
+  const panel = el("issueDetailsPanel");
+  panel.hidden = false;
 
   panel.innerHTML = `
-    <button type="button" class="secondary close-issue-details">
+    <button class="secondary" id="closeIssue">
       ← Back to Monitoring
     </button>
 
-    <h2>Issue Details & Status History</h2>
+    <h2>Issue Details &amp; Action History</h2>
 
-    <p>${esc(issue.section || "")}
-      — ${esc(fmt(issueDate(issue)))}</p>
+    <p><strong>Section / Area:</strong>
+      ${esc(sectionDisplay(i))}</p>
 
-    <div class="report-content">
-      ${esc(issue.issue || issue.description || "")}
+    <p><strong>Category:</strong>
+      ${esc(i.category || i.area || "General")}</p>
+
+    <div class="guidance issue-original">
+      ${esc(i.issue || i.description || "")}
     </div>
 
-    <h3>Follow-up History</h3>
+    <h3>Action History</h3>
+    ${historyHTML(i)}
 
-    ${historyHTML(issue)}
-    ${editorHTML(issue)}
+    <div class="followup-editor" data-id="${esc(i.id)}">
+      <label>
+        Authorized Badge Number
+        <input class="f-badge" type="password" inputmode="numeric">
+      </label>
+
+      <label>
+        Action Taken
+        <textarea class="f-action"
+          placeholder="Document action taken..."></textarea>
+      </label>
+
+      <label>
+        Status
+        <select class="f-status">
+          ${STATUSES.map(s => `
+            <option ${statusOf(i) === s ? "selected" : ""}>
+              ${s}
+            </option>
+          `).join("")}
+        </select>
+      </label>
+
+      <button class="followup-save">
+        Save Follow-up
+      </button>
+
+      <p class="followup-message"></p>
+    </div>
   `;
 
-  panel.style.display = "block";
-  panel.scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
+  panel.scrollIntoView({ behavior: "smooth" });
 }
-
-// SAVE FOLLOW-UP
 
 async function saveFollowup(button) {
   const editor = button.closest(".followup-editor");
-  if (!editor) return;
-
-  const id = editor.dataset.issueId;
-  const issue = allIssues.find(item => item.id === id);
-  if (!issue) return;
+  const id = editor.dataset.id;
 
   const badge = editor.querySelector(".f-badge").value.trim();
   const name = authorizedBadges[badge];
@@ -1022,9 +980,11 @@ async function saveFollowup(button) {
     return;
   }
 
-  if (!action && status === statusOf(issue) &&
-      hasRecordedStatus(issue)) {
-    message.textContent = "Enter an action or change status.";
+  const i = allIssues.find(x => x.id === id);
+  if (!i) return;
+
+  if (!action && status === statusOf(i)) {
+    message.textContent = "Enter an action or change the status.";
     return;
   }
 
@@ -1032,204 +992,235 @@ async function saveFollowup(button) {
   message.textContent = "Saving...";
 
   try {
-    const ref = issuesRef.doc(id);
-
     await db.runTransaction(async transaction => {
+      const ref = issuesRef.doc(id);
       const snapshot = await transaction.get(ref);
 
-      const current = snapshot.exists
-        ? snapshot.data()
-        : issue;
+      if (!snapshot.exists) {
+        throw Error("Issue record not found.");
+      }
 
+      const current = snapshot.data();
+      const now = new Date().toISOString();
       const previous = statusOf(current);
-      const date = new Date().toISOString();
-
       const actions = [...actionsOf(current)];
 
       if (action) {
-        actions.push({ name, action, date });
+        actions.push({
+          name,
+          action,
+          date: now
+        });
       }
 
       const statusHistory = [
         ...historyOf(current),
         {
-          date,
+          date: now,
           status,
-          previousStatus: hasRecordedStatus(current)
-            ? previous
-            : null,
+          previousStatus: previous,
           updatedBy: name,
           action: action || "Status updated"
         }
       ];
 
-      const update = {
+      transaction.update(ref, {
         actions,
         statusHistory,
         status,
         lastUpdatedBy: name,
-        lastUpdatedAt: date,
+        lastUpdatedAt: now,
         closedBy: status === "Closed" ? name : null,
-        closedAt: status === "Closed" ? date : null
-      };
-
-      if (snapshot.exists) {
-        transaction.update(ref, update);
-      } else {
-        transaction.set(ref, {
-          ...issue,
-          ...update,
-          legacy: true
-        });
-      }
+        closedAt: status === "Closed" ? now : null
+      });
     });
 
+    el("issueDetailsPanel").hidden = true;
     await loadData();
 
   } catch (error) {
     console.error(error);
-    message.textContent =
-      "Unable to save. Check Firestore permissions.";
+    message.textContent = "Unable to save. Check Firestore permissions.";
     button.disabled = false;
   }
 }
 
-// EXCEL EXPORT
+function downloadReport(id) {
+  const r = reports.find(x => x.id === id);
+  if (!r) return;
 
-function exportReportsToExcel(data, filename) {
-  if (!data.length) {
-    alert("No reports to export.");
-    return;
-  }
-
-  if (typeof XLSX === "undefined") {
-    alert("Excel library is unavailable.");
-    return;
-  }
-
-  const rows = [[
-    "Date",
-    "Employee Name",
-    "Badge Number",
-    "Section",
-    "Shift",
-    "Priority",
-    "Report Content",
-    "Follow-up Actions",
-    "Status",
-    "Closed By",
-    "Last Updated By"
-  ]];
-
-  data.forEach(report => {
-    const related = allIssues.filter(
-      issue => issue.reportId === report.id
-    );
-
-    rows.push([
-      report.dateDisplay || fmt(reportDate(report)),
-      report.employeeName || "",
-      report.badgeNumber || "",
-      report.section || "",
-      report.shift || "",
-      report.priority || "",
-      report.content || "",
-      related.map(issue =>
-        `${issue.category || "Issue"}: ${issue.issue || ""}\n` +
-        actionsOf(issue).map(action =>
-          `${action.name}: ${action.action}`
-        ).join("\n")
-      ).join("\n\n"),
-      related.map(statusOf).join("; "),
-      related.map(issue => issue.closedBy || "")
-        .filter(Boolean).join("; "),
-      related.map(issue => issue.lastUpdatedBy || "")
-        .filter(Boolean).join("; ")
-    ]);
+  const blob = new Blob([r.content || ""], {
+    type: "text/plain;charset=utf-8"
   });
 
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
 
-  sheet["!cols"] = [
-    { wch: 24 }, { wch: 25 }, { wch: 16 },
-    { wch: 24 }, { wch: 14 }, { wch: 14 },
-    { wch: 75 }, { wch: 75 }, { wch: 25 },
-    { wch: 26 }, { wch: 26 }
-  ];
+  a.href = url;
+  a.download =
+    `Pharmacy_Report_${r.reportDate || saudiDay(reportTime(r))}_${id}.txt`;
 
-  const book = XLSX.utils.book_new();
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 
-  XLSX.utils.book_append_sheet(
-    book,
-    sheet,
-    "Reports"
-  );
-
-  XLSX.writeFile(
-    book,
-    `${filename}_${new Date().toISOString().slice(0, 10)}.xlsx`
-  );
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-window.exportFilteredToCSV = function() {
-  exportReportsToExcel(
-    filteredReports,
+function exportExcel(rows, name) {
+  if (typeof XLSX === "undefined") {
+    alert("Excel library could not load.");
+    return;
+  }
+
+  if (!rows.length) {
+    alert("No data to export.");
+    return;
+  }
+
+  const sheet = XLSX.utils.json_to_sheet(rows);
+
+  sheet["!cols"] = Object.keys(rows[0]).map(key => ({
+    wch: /Issue|Content|Action|Endorsement/i.test(key) ? 70 : 24
+  }));
+
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "Reports");
+
+  XLSX.writeFile(book, `${name}_${todaySaudi()}.xlsx`);
+}
+
+function reportExportRows(data) {
+  return data.map(r => {
+    const related = allIssues.filter(i => i.reportId === r.id);
+
+    return {
+      "Date": r.reportDate || saudiDay(reportTime(r)),
+      "Employee Name": r.employeeName || "",
+      "Badge Number": r.badgeNumber || "",
+      "From Section": normalizeArea(r.section),
+      "Sent To": r.sentTo || "",
+      "Shift": r.shift || "",
+      "Report Purpose": purposeLabel(r.reportPurpose),
+      "Full Original Report": r.content || "",
+      "Issues": related.map(i =>
+        `${i.category || i.area}: ${i.issue || i.description}`
+      ).join("\n\n"),
+      "Actions Taken": related.map(i =>
+        actionsOf(i).map(a =>
+          `${a.name}: ${a.action} (${fmt(a.date)})`
+        ).join("\n")
+      ).join("\n\n"),
+      "Statuses": related.map(i => statusOf(i)).join("; "),
+      "Closed By": related.map(i =>
+        i.closedBy || ""
+      ).filter(Boolean).join("; ")
+    };
+  });
+}
+
+window.exportFilteredToCSV = () => {
+  exportExcel(
+    reportExportRows(filteredReports),
     "Filtered_Pharmacy_Reports"
   );
 };
 
-window.exportAllToCSV = function() {
-  exportReportsToExcel(
-    reports,
+window.exportAllToCSV = () => {
+  exportExcel(
+    reportExportRows(reports),
     "All_Pharmacy_Reports"
   );
 };
 
-// INITIALIZE
+function exportMonitoring() {
+  const range = monitoringRange();
+  if (!range) {
+    alert("Please select a valid monitoring period.");
+    return;
+  }
+
+  const cutoff = Math.min(range.end, Date.now() + 1);
+
+  exportExcel(monitoringShown.map(i => {
+    const action = actionAt(i, cutoff);
+
+    return {
+      "Date": i.reportDate || saudiDay(issueTime(i)),
+      "Section / Area": sectionDisplay(i),
+      "Issue Category": i.category || i.area || "",
+      "Original Issue / Endorsement": i.issue || i.description || "",
+      "Action Taken": action?.action || "",
+      "Status": statusAt(i, cutoff),
+      "Updated By": action?.name || i.lastUpdatedBy || "",
+      "Closed By": closedByAt(i, cutoff)
+    };
+  }), "Pharmacy_Monitoring");
+}
 
 document.addEventListener("DOMContentLoaded", () => {
-  el("reportForm")?.addEventListener(
-    "submit",
-    saveReport
-  );
+  setupFields();
 
-  el("addIssueBtn")?.addEventListener(
-    "click",
-    addIssueInput
-  );
+  el("reportForm").addEventListener("submit", saveReport);
 
   document.addEventListener("click", event => {
-    const detail = event.target.closest(".open-issue-details");
+    const download = event.target.closest("[data-download]");
 
-    if (detail) {
-      openIssueDetails(detail.dataset.issueId);
+    if (download) {
+      downloadReport(download.dataset.download);
       return;
     }
 
-    if (event.target.closest(".close-issue-details")) {
-      const panel = el("issueDetailsPanel");
-      if (panel) panel.style.display = "none";
+    const issue = event.target.closest("[data-issue]");
+
+    if (issue) {
+      openIssue(issue.dataset.issue);
       return;
     }
 
-    const saveButton = event.target.closest(".followup-save");
+    if (event.target.closest("#closeIssue")) {
+      el("issueDetailsPanel").hidden = true;
+      return;
+    }
 
-    if (saveButton) {
-      saveFollowup(saveButton);
+    const save = event.target.closest(".followup-save");
+
+    if (save) {
+      saveFollowup(save);
     }
   });
 
   [
-    "monitoringWeek",
+    "monitoringMode",
     "monitoringSection",
-    "monitoringStatus"
+    "monitoringCategory",
+    "monitoringStatus",
+    "monitoringFrom",
+    "monitoringTo"
   ].forEach(id => {
-    el(id)?.addEventListener(
-      "change",
-      renderMonitoring
-    );
+    el(id).addEventListener("change", renderMonitoring);
   });
 
-  setCurrentWeek();
+  el("monitoringApply").addEventListener(
+    "click",
+    renderMonitoring
+  );
+
+  el("monitoringReset").addEventListener("click", () => {
+    [
+      "monitoringSection",
+      "monitoringCategory",
+      "monitoringStatus"
+    ].forEach(id => el(id).value = "");
+
+    el("monitoringMode").value = "all";
+    renderMonitoring();
+  });
+
+  el("exportMonitoring").addEventListener(
+    "click",
+    exportMonitoring
+  );
+
   loadData();
 });
