@@ -9,7 +9,9 @@ const firebaseConfig = {
   measurementId: "G-WPJ95C048P"
 };
 
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
 
 const db = firebase.firestore();
 const reportsRef = db.collection("Shift Coordinator Reports");
@@ -154,6 +156,8 @@ function sectionDisplay(i) {
 }
 
 function fillSelect(id, items, placeholder) {
+  if (!el(id)) return;
+
   el(id).innerHTML =
     `<option value="">${esc(placeholder)}</option>` +
     items.map(x =>
@@ -275,10 +279,38 @@ function previewText(a) {
   ].join("\n");
 }
 
+// FIXED: Validate only actual input fields,
+// not the automatically generated preview.
+function validateReportInputs() {
+  const requiredFields = [
+    "employeeName",
+    "badgeNumber",
+    "reportDate",
+    "shift",
+    "section",
+    "q_present",
+    "reportPurpose"
+  ];
+
+  for (const id of requiredFields) {
+    const field = el(id);
+
+    if (field && !field.checkValidity()) {
+      field.reportValidity();
+      field.focus();
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// FIXED: Generate works with an empty preview.
 window.generateReport = function() {
-  if (!el("reportForm").reportValidity()) return;
+  if (!validateReportInputs()) return false;
 
   const a = answersNow();
+
   el("reportContent").value = previewText(a);
   previewSignature = signature(a);
 
@@ -286,20 +318,28 @@ window.generateReport = function() {
     behavior: "smooth",
     block: "center"
   });
+
+  return true;
 };
 
+// FIXED: Automatically generate preview before saving.
 async function saveReport(event) {
   event.preventDefault();
 
   const form = el("reportForm");
-  if (!form.reportValidity()) return;
+
+  if (!validateReportInputs()) return;
 
   const a = answersNow();
 
-  if (previewSignature !== signature(a) || !val("reportContent")) {
-    alert("Please generate the report preview after your latest changes.");
-    return;
+  if (
+    previewSignature !== signature(a) ||
+    !val("reportContent")
+  ) {
+    if (!generateReport()) return;
   }
+
+  if (!form.reportValidity()) return;
 
   const button = form.querySelector('[type="submit"]');
   button.disabled = true;
@@ -709,7 +749,6 @@ window.resetFilters = function() {
   filterReports();
 };
 
-// All dates or custom period. No Tuesday-to-Tuesday grouping.
 function monitoringRange() {
   if (val("monitoringMode") === "all") {
     return {
@@ -1135,6 +1174,7 @@ window.exportAllToCSV = () => {
 
 function exportMonitoring() {
   const range = monitoringRange();
+
   if (!range) {
     alert("Please select a valid monitoring period.");
     return;
